@@ -56,6 +56,7 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "graphql-config": "^5.1.1",
     "prettier": "^3.6.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^6.3.6"
   },
@@ -68,5 +69,8 @@
   "overrides": {
     "p-map": "^4.0.0"
   },
-  "author": "Samuel"
+  "author": "Samuel",
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
+  }
 }

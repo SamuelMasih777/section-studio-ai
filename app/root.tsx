@@ -1,4 +1,13 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import {
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+} from "react-router";
+import appStyles from "./styles/app.css?url";
+
+export const links = () => [{ rel: "stylesheet", href: appStyles }];
 
 export default function App() {
   return (
