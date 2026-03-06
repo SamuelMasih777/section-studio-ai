@@ -1,249 +1,179 @@
-import { useEffect } from "react";
-import type {
-  ActionFunctionArgs,
-  HeadersFunction,
-  LoaderFunctionArgs,
-} from "react-router";
-import { useFetcher } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
+import type { LoaderFunctionArgs, HeadersFunction } from "react-router";
+import { useLoaderData, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import db from "../db.server";
+import { getShopSections, getShopFavorites } from "../services/sections.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
 
-  return null;
+  const shop = await db.shop.findUnique({
+    where: { domain: session.shop },
+  });
+
+  if (!shop) return { sections: [], favorites: [] };
+
+  const [sections, favorites] = await Promise.all([
+    getShopSections(shop.id),
+    getShopFavorites(shop.id),
+  ]);
+
+  return { sections, favorites };
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-          }
-        }
-      }`,
-    {
-      variables: {
-        product: {
-          title: `${color} Snowboard`,
-        },
-      },
-    },
-  );
-  const responseJson = await response.json();
-
-  const product = responseJson.data!.productCreate!.product!;
-  const variantId = product.variants.edges[0]!.node!.id!;
-
-  const variantResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants {
-          id
-          price
-          barcode
-          createdAt
-        }
-      }
-    }`,
-    {
-      variables: {
-        productId: product.id,
-        variants: [{ id: variantId, price: "100.00" }],
-      },
-    },
-  );
-
-  const variantResponseJson = await variantResponse.json();
-
-  return {
-    product: responseJson!.data!.productCreate!.product,
-    variant:
-      variantResponseJson!.data!.productVariantsBulkUpdate!.productVariants,
-  };
-};
-
-export default function Index() {
-  const fetcher = useFetcher<typeof action>();
-
-  const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(fetcher.state) &&
-    fetcher.formMethod === "POST";
-
-  useEffect(() => {
-    if (fetcher.data?.product?.id) {
-      shopify.toast.show("Product created");
-    }
-  }, [fetcher.data?.product?.id, shopify]);
-
-  const generateProduct = () => fetcher.submit({}, { method: "POST" });
+export default function HomePage() {
+  const { sections, favorites } = useLoaderData<typeof loader>();
+  const hasSections = sections.length > 0;
 
   return (
-    <s-page heading="Shopify app template">
-      <s-button slot="primary-action" onClick={generateProduct}>
-        Generate a product
+    <s-page heading="Section Studio AI">
+      <s-button slot="primary-action" href="/app/sections" variant="primary">
+        Explore all sections
       </s-button>
 
-      <s-section heading="Congrats on creating a new Shopify app 🎉">
-        <s-paragraph>
-          This embedded app template uses{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/tools/app-bridge"
-            target="_blank"
-          >
-            App Bridge
-          </s-link>{" "}
-          interface examples like an{" "}
-          <s-link href="/app/additional">additional page in the app nav</s-link>
-          , as well as an{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            Admin GraphQL
-          </s-link>{" "}
-          mutation demo, to provide a starting point for app development.
-        </s-paragraph>
-      </s-section>
-      <s-section heading="Get started with products">
-        <s-paragraph>
-          Generate a product with GraphQL and get the JSON output for that
-          product. Learn more about the{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-            target="_blank"
-          >
-            productCreate
-          </s-link>{" "}
-          mutation in our API references.
-        </s-paragraph>
-        <s-stack direction="inline" gap="base">
-          <s-button
-            onClick={generateProduct}
-            {...(isLoading ? { loading: true } : {})}
-          >
-            Generate a product
-          </s-button>
-          {fetcher.data?.product && (
-            <s-button
-              onClick={() => {
-                shopify.intents.invoke?.("edit:shopify/Product", {
-                  value: fetcher.data?.product?.id,
-                });
-              }}
-              target="_blank"
-              variant="tertiary"
-            >
-              Edit product
-            </s-button>
-          )}
-        </s-stack>
-        {fetcher.data?.product && (
-          <s-section heading="productCreate mutation">
-            <s-stack direction="block" gap="base">
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.product, null, 2)}</code>
-                </pre>
-              </s-box>
+      {/* My Sections */}
+      <s-section heading={`My Sections${hasSections ? ` (${sections.length})` : ""}`}>
+        {hasSections ? (
+          <div className="ss-home-sections">
+            {sections.map((ownership: any) => (
+              <div key={ownership.id} className="ss-home-section-card">
+                <div className="ss-home-section-thumb">
+                  {ownership.section.thumbnailUrl ? (
+                    <img
+                      src={ownership.section.thumbnailUrl}
+                      alt={ownership.section.title}
+                    />
+                  ) : (
+                    <div className="ss-card-thumb-placeholder">📦</div>
+                  )}
+                </div>
+                <div className="ss-home-section-info">
+                  <h4>{ownership.section.title}</h4>
+                  <p>{ownership.section.category}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="ss-empty-state">
+            <h2>No Sections Yet, Let's Get You Started</h2>
+            <p>
+              Browse and explore beautifully designed Shopify sections ready to
+              plug-and-play into your theme.
+            </p>
 
-              <s-heading>productVariantsBulkUpdate mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.variant, null, 2)}</code>
-                </pre>
-              </s-box>
-            </s-stack>
-          </s-section>
+            <div className="ss-quick-guide">
+              <div className="ss-step-card">
+                <div className="ss-step-icon">🔍</div>
+                <div className="ss-step-number">1</div>
+                <h3>Browse and Find Sections</h3>
+                <p>
+                  Explore sections and view live demos to pick what fits best.
+                </p>
+              </div>
+              <div className="ss-step-card">
+                <div className="ss-step-icon">💳</div>
+                <div className="ss-step-number">2</div>
+                <h3>Purchase Your Sections</h3>
+                <p>
+                  Buy once, use forever. Some sections are free to install.
+                </p>
+              </div>
+              <div className="ss-step-card">
+                <div className="ss-step-icon">🎨</div>
+                <div className="ss-step-number">3</div>
+                <h3>Add and Customize Easily</h3>
+                <p>
+                  Add to your theme and edit it with the Theme Editor.
+                </p>
+              </div>
+            </div>
+
+            <s-button href="/app/sections" variant="primary">
+              Explore Sections
+            </s-button>
+          </div>
         )}
       </s-section>
 
-      <s-section slot="aside" heading="App template specs">
+      {/* Favorites */}
+      {favorites.length > 0 && (
+        <s-section heading={`Favorites (${favorites.length})`}>
+          <div className="ss-home-sections">
+            {favorites.map((fav: any) => (
+              <div key={fav.id} className="ss-home-section-card">
+                <div className="ss-home-section-thumb">
+                  {fav.section.thumbnailUrl ? (
+                    <img
+                      src={fav.section.thumbnailUrl}
+                      alt={fav.section.title}
+                    />
+                  ) : (
+                    <div className="ss-card-thumb-placeholder">❤️</div>
+                  )}
+                </div>
+                <div className="ss-home-section-info">
+                  <h4>{fav.section.title}</h4>
+                  <p>{fav.section.category}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </s-section>
+      )}
+
+      {/* Quick Guide */}
+      <s-section heading="Quick Guide">
         <s-paragraph>
-          <s-text>Framework: </s-text>
-          <s-link href="https://reactrouter.com/" target="_blank">
-            React Router
-          </s-link>
+          See how Section Studio AI works — browse sections, add them to any
+          Shopify theme, and customize from the Theme Editor.
         </s-paragraph>
-        <s-paragraph>
-          <s-text>Interface: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/app-home/using-polaris-components"
-            target="_blank"
-          >
-            Polaris web components
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>API: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            GraphQL
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Database: </s-text>
-          <s-link href="https://www.prisma.io/" target="_blank">
-            Prisma
-          </s-link>
-        </s-paragraph>
+        <div className="ss-quick-guide" style={{ marginTop: "16px" }}>
+          <div className="ss-step-card">
+            <div className="ss-step-icon">📚</div>
+            <h3>Browse the Library</h3>
+            <p>
+              Search by category, filter by price, and find the perfect section
+              for your store.
+            </p>
+          </div>
+          <div className="ss-step-card">
+            <div className="ss-step-icon">⚡</div>
+            <h3>One-Click Install</h3>
+            <p>
+              Purchased sections install directly into your active theme — no
+              code editing needed.
+            </p>
+          </div>
+          <div className="ss-step-card">
+            <div className="ss-step-icon">🛠️</div>
+            <h3>Customize in Editor</h3>
+            <p>
+              Use Shopify's Theme Editor to adjust every setting — colors, text,
+              layout, and more.
+            </p>
+          </div>
+        </div>
       </s-section>
 
-      <s-section slot="aside" heading="Next steps">
-        <s-unordered-list>
-          <s-list-item>
-            Build an{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/getting-started/build-app-example"
+      {/* Footer */}
+      <s-section>
+        <div className="ss-footer">
+          <div className="ss-footer-links">
+            <Link to="/app/help">FAQ</Link>
+            <Link to="/app/help">Contact Support</Link>
+            <Link to="/app/sections">Browse Sections</Link>
+            <Link to="/app/bundles">Bundle Deals</Link>
+            <a
+              href="https://shopify.dev/docs/storefronts/themes/architecture/sections"
               target="_blank"
+              rel="noopener noreferrer"
             >
-              example app
-            </s-link>
-          </s-list-item>
-          <s-list-item>
-            Explore Shopify&apos;s API with{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-              target="_blank"
-            >
-              GraphiQL
-            </s-link>
-          </s-list-item>
-        </s-unordered-list>
+              Shopify Docs
+            </a>
+          </div>
+        </div>
       </s-section>
     </s-page>
   );

@@ -1,16 +1,10 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Session {
@@ -31,4 +25,103 @@ model Session {
   emailVerified Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
+}
+
+model Shop {
+  id          String   @id @default(uuid())
+  domain      String   @unique
+  installedAt DateTime @default(now())
+  plan        String   @default("free")
+  ownerships  SectionOwnership[]
+  favorites   SectionFavorite[]
+  bundles     BundlePurchase[]
+}
+
+model Section {
+  id               String   @id @default(uuid())
+  handle           String   @unique
+  title            String
+  description      String?
+  price            Int      @default(0)
+  category         String
+  tags             String[] @default([])
+  thumbnailUrl     String?
+  previewImages    String[] @default([])
+  previewVideoUrl  String?
+  demoUrl          String?
+  isFeatured       Boolean  @default(false)
+  isPublished      Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  files            SectionFile[]
+  ownerships       SectionOwnership[]
+  favorites        SectionFavorite[]
+  bundleItems      BundleItem[]
+}
+
+model SectionFile {
+  id        String  @id @default(uuid())
+  sectionId String
+  filename  String
+  fileType  String
+  fileUrl   String
+  fileSize  Int?
+  sortOrder Int     @default(0)
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+}
+
+model SectionOwnership {
+  id          String   @id @default(uuid())
+  shopId      String
+  sectionId   String
+  purchasedAt DateTime @default(now())
+  chargeId    String?
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  section     Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  @@unique([shopId, sectionId])
+}
+
+model SectionFavorite {
+  id        String  @id @default(uuid())
+  shopId    String
+  sectionId String
+  shop      Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  @@unique([shopId, sectionId])
+}
+
+model Bundle {
+  id           String         @id @default(uuid())
+  handle       String         @unique
+  title        String
+  description  String?
+  price        Int
+  discount     Int            @default(25)
+  thumbnailUrl String?
+  isActive     Boolean        @default(true)
+  items        BundleItem[]
+  purchases    BundlePurchase[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model BundleItem {
+  id        String  @id @default(uuid())
+  bundleId  String
+  sectionId String
+  bundle    Bundle  @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  @@unique([bundleId, sectionId])
+}
+
+model BundlePurchase {
+  id          String   @id @default(uuid())
+  shopId      String
+  bundleId    String
+  chargeId    String?
+  purchasedAt DateTime @default(now())
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  bundle      Bundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  @@unique([shopId, bundleId])
 }
