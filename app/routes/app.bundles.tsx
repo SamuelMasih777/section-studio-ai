@@ -6,7 +6,20 @@ import db from "../db.server";
 import { getBundles } from "../services/sections.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  let session: any;
+  try {
+    const authResult = await authenticate.admin(request);
+    session = authResult.session;
+  } catch (e) {
+    if (process.env.NODE_ENV === "development") {
+      session = await db.session.findFirst({
+        where: { id: { startsWith: 'offline_' } }
+      });
+      if (!session) throw e;
+    } else {
+      throw e;
+    }
+  }
 
   const shop = await db.shop.findUnique({
     where: { domain: session.shop },

@@ -19,8 +19,8 @@
 
 .ss-section-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
 }
 
 @media (max-width: 1100px) {
@@ -270,11 +270,30 @@
   flex-shrink: 0;
 }
 
+@media (max-width: 1024px) {
+  .ss-explore-layout {
+    flex-wrap: wrap;
+  }
+  .ss-category-sidebar {
+    width: 100%;
+    order: -1; /* Move categories above filters/grid on tablet or just hide them? */
+  }
+  .ss-category-tabs-vertical {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .ss-cat-tab-v {
+    width: auto;
+  }
+}
+
 @media (max-width: 780px) {
   .ss-explore-layout {
     flex-direction: column;
   }
-  .ss-filters-sidebar {
+  .ss-filters-sidebar,
+  .ss-sections-main {
     width: 100%;
   }
 }
@@ -282,6 +301,20 @@
 .ss-sections-main {
   flex: 1;
   min-width: 0;
+}
+
+.ss-category-sidebar {
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.ss-category-sidebar h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ss-text);
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* ===== Search ===== */
@@ -364,6 +397,48 @@
 
 .ss-cat-icon {
   font-size: 20px;
+}
+
+/* ===== Vertical Category Tabs ===== */
+
+.ss-category-tabs-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ss-cat-tab-v {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--ss-radius);
+  border: 1px solid var(--ss-border);
+  background: var(--ss-card-bg);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ss-text-secondary);
+  transition: all var(--ss-transition);
+  text-align: left;
+  width: 100%;
+}
+
+.ss-cat-tab-v:hover,
+.ss-cat-tab-v.active {
+  background: var(--ss-primary);
+  color: white;
+  border-color: var(--ss-primary);
+}
+
+.ss-cat-icon-v {
+  font-size: 18px;
+}
+
+.ss-cat-label-v {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ===== Filter Sidebar ===== */
@@ -560,15 +635,7 @@
 }
 
 .ss-bundle-card {
-  background: var(--ss-card-bg);
-  border: 1px solid var(--ss-border);
-  border-radius: var(--ss-radius);
   padding: 24px;
-  transition: box-shadow var(--ss-transition);
-}
-
-.ss-bundle-card:hover {
-  box-shadow: var(--ss-shadow-hover);
 }
 
 .ss-bundle-title {
@@ -582,6 +649,23 @@
   color: var(--ss-text-secondary);
   margin: 0 0 16px;
   line-height: 1.5;
+}
+
+/* Card Design Sync */
+.ss-card,
+.ss-bundle-card {
+  background: var(--ss-card-bg);
+  border: 1px solid var(--ss-border);
+  border-radius: var(--ss-radius);
+  overflow: hidden;
+  transition: all var(--ss-transition);
+  box-shadow: var(--ss-shadow);
+}
+
+.ss-card:hover,
+.ss-bundle-card:hover {
+  box-shadow: var(--ss-shadow-hover);
+  transform: translateY(-2px);
 }
 
 .ss-bundle-sections {
@@ -874,4 +958,29 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Global Linear Loader */
+.ss-linear-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: transparent;
+  z-index: 10000;
+  overflow: hidden;
+}
+
+.ss-linear-loader-bar {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #008060, #aee9d1, #008060);
+  background-size: 200% 100%;
+  animation: ss-loading 1.5s infinite linear;
+}
+
+@keyframes ss-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
