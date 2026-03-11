@@ -24,15 +24,17 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import db from "../db.server";
 import { authenticate } from "../shopify.server";
-import { getCategoryIcon } from "../constants/categories";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFilteredSections } from "../hooks/useFilteredSections";
 import { useMarketplaceStore } from "../stores/marketplaceStore";
 import type {
+  CategoryMeta,
+  MetadataApiResponse,
   PriceFilter,
   SectionListItem,
   SectionsApiResponse,
   SortBy,
+  TagMeta,
 } from "../types/marketplace";
 
 const PAGE_SIZE = 50;
@@ -72,6 +74,8 @@ interface ExploreCardProps {
   section: SectionListItem;
   index: number;
   sortBy: SortBy;
+  categoryEmoji: string;
+  categoryName: string;
   onOpenDetail: (handle: string) => void;
   onFavorite: (sectionId: string) => void;
 }
@@ -80,6 +84,8 @@ const ExploreCard = memo(function ExploreCard({
   section,
   index,
   sortBy,
+  categoryEmoji,
+  categoryName,
   onOpenDetail,
   onFavorite,
 }: ExploreCardProps) {
@@ -115,7 +121,7 @@ const ExploreCard = memo(function ExploreCard({
           />
         ) : (
           <div className="ss-card-thumb-placeholder">
-            {getCategoryIcon(section.category)}
+            {categoryEmoji}
           </div>
         )}
 
@@ -152,26 +158,93 @@ const ExploreCard = memo(function ExploreCard({
         <h3 className="ss-card-title">{section.title}</h3>
         <div className="ss-mp-card-meta">
           <span className="ss-mp-card-category">
-            {getCategoryIcon(section.category)} {section.category}
+            {categoryEmoji} {categoryName}
           </span>
-          {section.tags.slice(0, 3).map((tag) => (
-            <span key={tag} className="ss-mp-tag-pill">
-              {tag}
-            </span>
-          ))}
+          {/* Show a single row of tags; truncate with … when there are more */}
+          {section.tags.length > 0 && (
+            <>
+              {section.tags.slice(0, 3).map((tag) => (
+                <span key={tag} className="ss-mp-tag-pill">
+                  {tag}
+                </span>
+              ))}
+              {section.tags.length > 3 && (
+                <span className="ss-mp-tag-pill">…</span>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      <div className="ss-card-actions">
-        <s-button
-          variant="primary"
-          onClick={(e: any) => {
+      {/* Action row: wishlist, open demo in new tab, open preview modal */}
+      <div className="ss-card-actions ss-card-actions--icons">
+        <button
+          type="button"
+          className={`ss-card-icon-btn${
+            section.isFavorited ? " ss-card-icon-btn--active" : ""
+          }`}
+          title={section.isFavorited ? "Remove from wishlist" : "Add to wishlist"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onFavorite(section.id);
+          }}
+          aria-label={section.isFavorited ? "Remove from favorites" : "Add to favorites"}
+        >
+          {/* Heart icon (outline) */}
+          <svg
+            aria-hidden="true"
+            width={18}
+            height={18}
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 17.5a1 1 0 0 1-.64-.23l-4.9-4.17A4.5 4.5 0 0 1 3 6.5 3.5 3.5 0 0 1 6.5 3c1.2 0 2.3.55 3 1.42A3.74 3.74 0 0 1 12.5 3 3.5 3.5 0 0 1 16 6.5a4.5 4.5 0 0 1-1.46 3.6l-4.9 4.17a1 1 0 0 1-.64.23Z"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              fill="none"
+            />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          className="ss-card-icon-btn"
+          title="View demo store"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (section.demoUrl) {
+              window.open(section.demoUrl, "_blank", "noopener,noreferrer");
+            }
+          }}
+          aria-label="Open demo in new tab"
+        >
+          {/* External-link icon from Polaris */}
+          <img
+            src="https://d1cfqfkbjualid.cloudfront.net/assets/polaris/external_minor-365190dc0a7d03717398e0587eabd2ccfb5536f46051989c5b571729c39faba2.svg"
+            alt=""
+            aria-hidden="true"
+          />
+        </button>
+
+        <button
+          type="button"
+          className="ss-card-icon-btn"
+          title="More info"
+          onClick={(e) => {
             e.stopPropagation();
             onOpenDetail(section.handle);
           }}
+          aria-label="Preview section"
         >
-          Preview
-        </s-button>
+          {/* Eye icon from Polaris */}
+          <img
+            src="https://d1cfqfkbjualid.cloudfront.net/assets/polaris/view_minor-25846dc545d78a24911d93baf009e3667f764dc4fcd0b75a05c0daae940a4d41.svg"
+            alt=""
+            aria-hidden="true"
+          />
+        </button>
       </div>
     </div>
   );
@@ -189,6 +262,279 @@ function SkeletonCard() {
   );
 }
 
+/* ── Section Detail Modal ───────────────────────────────────────── */
+
+interface SectionDetailModalProps {
+  section: SectionListItem;
+  onClose: () => void;
+  onFavorite: (sectionId: string) => void;
+}
+
+const SectionDetailModal = memo(function SectionDetailModal({
+  section,
+  onClose,
+  onFavorite,
+}: SectionDetailModalProps) {
+  const [currentImage, setCurrentImage] = useState(0);
+
+  const images =
+    section.previewImages.length > 0
+      ? section.previewImages
+      : section.thumbnailUrl
+        ? [section.thumbnailUrl]
+        : [];
+
+  const isFree = section.price === 0;
+  const priceFormatted = `$${(section.price / 100).toFixed(
+    section.price % 100 === 0 ? 0 : 2,
+  )}`;
+
+  const hasDiscount =
+    !isFree && section.compareAtPrice !== null && section.compareAtPrice > section.price;
+  const originalPriceFormatted = hasDiscount
+    ? `$${(section.compareAtPrice! / 100).toFixed(
+        section.compareAtPrice! % 100 === 0 ? 0 : 2,
+      )}`
+    : null;
+  const discountPercent = hasDiscount
+    ? Math.round(
+        ((section.compareAtPrice! - section.price) / section.compareAtPrice!) * 100,
+      )
+    : 0;
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
+  const goImage = useCallback(
+    (dir: 1 | -1) => {
+      setCurrentImage((i) => {
+        const next = i + dir;
+        if (next < 0) return images.length - 1;
+        if (next >= images.length) return 0;
+        return next;
+      });
+    },
+    [images.length],
+  );
+
+  return (
+    <div
+      className="ss-detail-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={section.title}
+    >
+      <div className="ss-detail-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="ss-detail-header">
+          <h2>{section.title}</h2>
+          <button
+            type="button"
+            className="ss-detail-close"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="ss-detail-body">
+          {/* Left column: carousel + details */}
+          <div className="ss-detail-left">
+            {images.length > 0 && (
+              <div className="ss-detail-carousel">
+                <div className="ss-detail-carousel-viewport">
+                  <img
+                    src={images[currentImage]}
+                    alt={`${section.title} preview ${currentImage + 1}`}
+                    draggable={false}
+                  />
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        className="ss-detail-carousel-arrow ss-detail-carousel-prev"
+                        onClick={() => goImage(-1)}
+                        aria-label="Previous image"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        className="ss-detail-carousel-arrow ss-detail-carousel-next"
+                        onClick={() => goImage(1)}
+                        aria-label="Next image"
+                      >
+                        ›
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {images.length > 1 && (
+                  <div className="ss-detail-carousel-dots">
+                    {images.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className={`ss-detail-carousel-dot${
+                          i === currentImage ? " ss-detail-carousel-dot--active" : ""
+                        }`}
+                        onClick={() => setCurrentImage(i)}
+                        aria-label={`Go to image ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {images.length > 1 && (
+                  <div className="ss-detail-thumbnails">
+                    {images.map((img, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className={`ss-detail-thumb${
+                          i === currentImage ? " ss-detail-thumb--active" : ""
+                        }`}
+                        onClick={() => setCurrentImage(i)}
+                      >
+                        <img
+                          src={img}
+                          alt={`Thumbnail ${i + 1}`}
+                          draggable={false}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {section.description && (
+              <div className="ss-detail-description">
+                <h3>Details:</h3>
+                <p>{section.description}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right column: sticky info card */}
+          <div className="ss-detail-right">
+            <div className="ss-detail-card">
+              <div className="ss-detail-card-top">
+                <h3 className="ss-detail-card-title">{section.title}</h3>
+                <button
+                  type="button"
+                  className={`ss-detail-fav${
+                    section.isFavorited ? " ss-detail-fav--active" : ""
+                  }`}
+                  onClick={() => onFavorite(section.id)}
+                  aria-label={
+                    section.isFavorited
+                      ? "Remove from favorites"
+                      : "Add to favorites"
+                  }
+                >
+                  {section.isFavorited ? "❤️" : "🤍"}
+                </button>
+              </div>
+
+              {isFree ? (
+                /* ── Free section card ── */
+                <>
+                  <p className="ss-detail-price-label">Free</p>
+                  <button type="button" className="ss-detail-cta ss-detail-cta--free">
+                    Get free section ✓
+                  </button>
+                </>
+              ) : (
+                /* ── Paid section card ── */
+                <>
+                  <div className="ss-detail-price-row">
+                    <span className="ss-detail-price">{priceFormatted}</span>
+                    {hasDiscount && (
+                      <span className="ss-detail-price-original">
+                        {originalPriceFormatted}
+                      </span>
+                    )}
+                    <span className="ss-detail-price-note">(One-time charge)</span>
+                    {hasDiscount && (
+                      <span className="ss-detail-discount-badge">
+                        {discountPercent}% off
+                      </span>
+                    )}
+                  </div>
+                  <button type="button" className="ss-detail-cta ss-detail-cta--paid">
+                    Purchase now ✓
+                  </button>
+                </>
+              )}
+
+              {!isFree && (
+                <div className="ss-detail-secure">
+                  🔒 Secure payment through Shopify
+                </div>
+              )}
+
+              <ul className="ss-detail-features">
+                <li>✅ No recurring fees</li>
+                <li>✅ Lifetime access &amp; free updates</li>
+                <li>✅ Works with any Shopify theme</li>
+                <li>
+                  ✨ Includes {section.presetsCount}{" "}
+                  {section.presetsCount === 1 ? "preset" : "presets"}
+                </li>
+              </ul>
+
+              <div className="ss-detail-btn-row">
+                {section.demoUrl && (
+                  <a
+                    href={section.demoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ss-detail-btn-secondary"
+                  >
+                    Demo Store 🔗
+                  </a>
+                )}
+                <button type="button" className="ss-detail-btn-secondary">
+                  Try section 🖼️
+                </button>
+              </div>
+
+              {!isFree && (
+                <div className="ss-detail-bundle-upsell">
+                  🎁 Better deal?{" "}
+                  <a href="/app/bundles">Bundle &amp; save up to 25%</a>
+                  {section.isOwned && (
+                    <span className="ss-detail-preadded">
+                      (this section's pre-added)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function SectionsPage() {
   const { shopId, shopDomain } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -201,6 +547,8 @@ export default function SectionsPage() {
   const isLoading = useMarketplaceStore((s) => s.isLoading);
   const isLoadingMore = useMarketplaceStore((s) => s.isLoadingMore);
   const fetchError = useMarketplaceStore((s) => s.fetchError);
+  const dbCategories = useMarketplaceStore((s) => s.allCategories);
+  const dbTagsMeta = useMarketplaceStore((s) => s.allTagsMeta);
 
   // Filters
   const selectedCategory = useMarketplaceStore((s) => s.selectedCategory);
@@ -217,6 +565,7 @@ export default function SectionsPage() {
   const setLoading = useMarketplaceStore((s) => s.setLoading);
   const setLoadingMore = useMarketplaceStore((s) => s.setLoadingMore);
   const setFetchError = useMarketplaceStore((s) => s.setFetchError);
+  const setMetadata = useMarketplaceStore((s) => s.setMetadata);
   const setSearch = useMarketplaceStore((s) => s.setSearch);
   const setCategory = useMarketplaceStore((s) => s.setCategory);
   const toggleTag = useMarketplaceStore((s) => s.toggleTag);
@@ -250,6 +599,19 @@ export default function SectionsPage() {
     });
     void useMarketplaceStore.persist.rehydrate();
   }, [shopDomain]);
+
+  // Fetch metadata (categories + tags) once on mount
+  useEffect(() => {
+    if (dbCategories.length > 0) return;
+    fetch("/api/metadata", { credentials: "same-origin" })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<MetadataApiResponse>;
+      })
+      .then(({ categories: cats, tags }) => setMetadata(cats, tags))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Initial fetch (first page)
   useEffect(() => {
@@ -315,23 +677,60 @@ export default function SectionsPage() {
     return () => observer.disconnect();
   }, [appendSections, hasMore, isLoading, isLoadingMore, setLoadingMore]);
 
-  // Derived: categories and tags from loaded pages
-  const categories = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const s of allSections) map.set(s.category, (map.get(s.category) ?? 0) + 1);
-    return [
-      { key: "all", label: "All", count: allSections.length },
-      ...Array.from(map.entries())
-        .sort((a, b) => b[1] - a[1])
-        .map(([key, count]) => ({ key, label: key, count })),
-    ];
-  }, [allSections]);
+  // Build a handle->CategoryMeta lookup for icon rendering
+  const categoryMap = useMemo(() => {
+    const m = new Map<string, CategoryMeta>();
+    for (const c of dbCategories) m.set(c.handle, c);
+    return m;
+  }, [dbCategories]);
 
+  const tagMap = useMemo(() => {
+    const m = new Map<string, TagMeta>();
+    for (const t of dbTagsMeta) m.set(t.handle, t);
+    return m;
+  }, [dbTagsMeta]);
+
+  // Categories: DB-sourced metadata + section counts from loaded pages
+  const categories = useMemo(() => {
+    const countMap = new Map<string, number>();
+    for (const s of allSections)
+      countMap.set(s.category, (countMap.get(s.category) ?? 0) + 1);
+
+    const items: { key: string; label: string; emoji: string; count: number }[] = [];
+
+    if (dbCategories.length > 0) {
+      for (const cat of dbCategories) {
+        const count = countMap.get(cat.handle) ?? 0;
+        if (count > 0) items.push({ key: cat.handle, label: cat.name, emoji: cat.emoji, count });
+      }
+    } else {
+      for (const [key, count] of countMap.entries()) {
+        items.push({ key, label: key, emoji: "📦", count });
+      }
+      items.sort((a, b) => b.count - a.count);
+    }
+
+    return [
+      { key: "all", label: "All", emoji: "", count: allSections.length },
+      ...items,
+    ];
+  }, [allSections, dbCategories]);
+
+  // Tags: DB-sourced metadata, filtered to only tags present in loaded sections
   const allTags = useMemo(() => {
-    const set = new Set<string>();
-    for (const s of allSections) for (const t of s.tags) set.add(t);
-    return Array.from(set).sort();
-  }, [allSections]);
+    const presentTags = new Set<string>();
+    for (const s of allSections) for (const t of s.tags) presentTags.add(t);
+
+    if (dbTagsMeta.length > 0) {
+      return dbTagsMeta
+        .filter((t) => presentTags.has(t.handle))
+        .map((t) => ({ handle: t.handle, name: t.name, emoji: t.emoji }));
+    }
+
+    return Array.from(presentTags)
+      .sort()
+      .map((h) => ({ handle: h, name: h, emoji: "🏷️" }));
+  }, [allSections, dbTagsMeta]);
 
   const filteredSections = useFilteredSections(
     allSections,
@@ -359,12 +758,23 @@ export default function SectionsPage() {
     favoriteFetcherRef.current = favoriteFetcher;
   });
 
-  const handleOpenDetail = useCallback(
-    (handle: string) => {
-      navigate(`/app/sections?detail=${handle}`);
-    },
-    [navigate],
+  // ── Detail modal state (pure local — no router navigation, instant open) ──
+  const [detailHandle, setDetailHandle] = useState<string | null>(null);
+  const detailSection = useMemo(
+    () =>
+      detailHandle
+        ? allSections.find((s) => s.handle === detailHandle) ?? null
+        : null,
+    [detailHandle, allSections],
   );
+
+  const handleOpenDetail = useCallback((handle: string) => {
+    setDetailHandle(handle);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setDetailHandle(null);
+  }, []);
 
   const handleFavorite = useCallback(
     (sectionId: string) => {
@@ -507,12 +917,10 @@ export default function SectionsPage() {
                     }`}
                     onClick={() => startTransition(() => setCategory(cat.key))}
                   >
-                    {cat.key !== "all" && (
-                      <span className="ss-mp-chip-icon">
-                        {getCategoryIcon(cat.key)}
-                      </span>
+                    {cat.emoji && (
+                      <span className="ss-mp-chip-icon">{cat.emoji}</span>
                     )}
-                    {cat.key === "all" ? "All" : cat.label}
+                    {cat.label}
                     <span className="ss-mp-chip-count">{cat.count}</span>
                   </button>
                 ))}
@@ -620,14 +1028,16 @@ export default function SectionsPage() {
               <div ref={tagsScrollRef} className="ss-mp-tags-scroll">
                 {allTags.map((tag) => (
                   <button
-                    key={tag}
+                    key={tag.handle}
                     type="button"
                     className={`ss-mp-tag-btn${
-                      selectedTags.includes(tag) ? " ss-mp-tag-btn--active" : ""
+                      selectedTags.includes(tag.handle)
+                        ? " ss-mp-tag-btn--active"
+                        : ""
                     }`}
-                    onClick={() => startTransition(() => toggleTag(tag))}
+                    onClick={() => startTransition(() => toggleTag(tag.handle))}
                   >
-                    {tag}
+                    {tag.name}
                   </button>
                 ))}
                 {selectedTags.length > 0 && (
@@ -753,6 +1163,8 @@ export default function SectionsPage() {
                   section={section}
                   index={index}
                   sortBy={sortBy}
+                  categoryEmoji={categoryMap.get(section.category)?.emoji ?? "📦"}
+                  categoryName={categoryMap.get(section.category)?.name ?? section.category}
                   onOpenDetail={handleOpenDetail}
                   onFavorite={handleFavorite}
                 />
@@ -771,6 +1183,15 @@ export default function SectionsPage() {
           </>
         )}
       </div>
+
+      {/* Detail modal */}
+      {detailSection && (
+        <SectionDetailModal
+          section={detailSection}
+          onClose={handleCloseDetail}
+          onFavorite={handleFavorite}
+        />
+      )}
     </s-page>
   );
 }

@@ -1,5 +1,3 @@
-import { getCategoryIcon } from "../constants/categories";
-
 export interface SectionCardSection {
   id: string;
   handle: string;
@@ -13,11 +11,12 @@ export interface SectionCardSection {
 
 interface SectionCardProps {
   section: SectionCardSection;
+  categoryEmoji?: string;
   onOpenDetail: (handle: string) => void;
   onFavorite: (e: React.MouseEvent, sectionId: string) => void;
 }
 
-export function SectionCard({ section, onOpenDetail, onFavorite }: SectionCardProps) {
+export function SectionCard({ section, categoryEmoji = "📦", onOpenDetail, onFavorite }: SectionCardProps) {
   const isOwned = (section.ownerships?.length ?? 0) > 0;
   const isFav = (section.favorites?.length ?? 0) > 0;
 
@@ -43,7 +42,7 @@ export function SectionCard({ section, onOpenDetail, onFavorite }: SectionCardPr
           />
         ) : (
           <div className="ss-card-thumb-placeholder">
-            {getCategoryIcon(section.category)}
+            {categoryEmoji}
           </div>
         )}
         <button

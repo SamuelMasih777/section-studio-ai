@@ -15,7 +15,13 @@
  */
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { SectionListItem, PriceFilter, SortBy } from "../types/marketplace";
+import type {
+  SectionListItem,
+  CategoryMeta,
+  TagMeta,
+  PriceFilter,
+  SortBy,
+} from "../types/marketplace";
 
 // ─── Default filter values ────────────────────────────────────────────────────
 
@@ -43,6 +49,11 @@ interface MarketplaceStore {
   isLoadingMore: boolean;
   fetchError: string | null;
 
+  /** Category metadata from the DB (fetched once via /api/metadata). */
+  allCategories: CategoryMeta[];
+  /** Tag metadata from the DB (fetched once via /api/metadata). */
+  allTagsMeta: TagMeta[];
+
   // ── Persisted filter state ──
   searchQuery: string;
   selectedCategory: string;
@@ -59,6 +70,8 @@ interface MarketplaceStore {
   setLoading: (v: boolean) => void;
   setLoadingMore: (v: boolean) => void;
   setFetchError: (e: string | null) => void;
+  /** Store category + tag metadata from /api/metadata. */
+  setMetadata: (categories: CategoryMeta[], tags: TagMeta[]) => void;
 
   // ── Optimistic ownership / favorite updates ──
   markOwned: (sectionId: string) => void;
@@ -107,6 +120,8 @@ export const useMarketplaceStore = create<MarketplaceStore>()(
       isLoading: false,
       isLoadingMore: false,
       fetchError: null,
+      allCategories: [],
+      allTagsMeta: [],
 
       // filter defaults
       ...DEFAULT_FILTERS,
@@ -135,6 +150,9 @@ export const useMarketplaceStore = create<MarketplaceStore>()(
       setLoadingMore: (v) => set({ isLoadingMore: v }),
 
       setFetchError: (e) => set({ fetchError: e, isLoading: false }),
+
+      setMetadata: (categories, tags) =>
+        set({ allCategories: categories, allTagsMeta: tags }),
 
       // When a purchase completes, flip isOwned without refetching
       markOwned: (sectionId) =>

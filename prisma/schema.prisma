@@ -43,6 +43,8 @@ model Section {
   title            String
   description      String?
   price            Int      @default(0)
+  compareAtPrice   Int?
+  presetsCount     Int      @default(1)
   category         String
   tags             String[] @default([])
   thumbnailUrl     String?
@@ -93,6 +95,28 @@ model SectionFavorite {
   shop      Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
   section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   @@unique([shopId, sectionId])
+}
+
+model Category {
+  handle      String   @id
+  name        String
+  emoji       String   @default("📦")
+  imageUrl    String?
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model Tag {
+  handle      String   @id
+  name        String
+  emoji       String   @default("🏷️")
+  imageUrl    String?
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
 }
 
 model Bundle {

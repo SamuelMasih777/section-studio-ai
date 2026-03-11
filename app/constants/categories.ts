@@ -1,44 +1,36 @@
-/** Fallback category options when DB has no categories (label + key for filtering) */
-export const FALLBACK_CATEGORIES = [
-  { key: "popular", label: "Popular" },
-  { key: "trending", label: "Trending" },
-  { key: "newest", label: "Newest" },
-  { key: "free", label: "Free" },
-  { key: "features", label: "Features" },
-  { key: "testimonial", label: "Testimonial" },
-  { key: "hero", label: "Hero" },
-  { key: "video", label: "Video" },
-  { key: "scrolling", label: "Scrolling" },
-  { key: "images", label: "Images" },
-  { key: "faq", label: "FAQ" },
-] as const;
+/**
+ * Category icon lookup.
+ *
+ * The canonical source of truth for categories is now the DB `Category` table,
+ * fetched via GET /api/metadata and stored in `useMarketplaceStore.allCategories`.
+ *
+ * This file provides a lightweight helper for contexts where the store isn't
+ * available (e.g. server-side or non-React code). It falls back to a static
+ * emoji map which mirrors the seeded DB values.
+ */
 
-export const CATEGORY_ICONS: Record<string, string> = {
-  popular: "⭐",
-  trending: "🔥",
-  newest: "🆕",
-  free: "🎁",
+const EMOJI_FALLBACK: Record<string, string> = {
+  hero: "🦸",
   features: "✨",
   testimonial: "💬",
-  hero: "🦸",
+  faq: "❓",
   video: "🎬",
   scrolling: "↔️",
-  "countdown-timer": "⏱️",
-  images: "🖼️",
-  snippet: "✂️",
-  faq: "❓",
+  payment: "💳",
+  counter: "🔢",
   gallery: "🎨",
+  "trust-badges": "🛡️",
+  comparison: "⚖️",
+  banner: "🏷️",
+  images: "🖼️",
   product: "🛍️",
   header: "📌",
   footer: "📎",
-  banner: "🏷️",
-  "trust-badges": "🛡️",
-  counter: "🔢",
-  payment: "💳",
-  comparison: "⚖️",
+  snippet: "✂️",
+  "countdown-timer": "⏱️",
   other: "📦",
 };
 
-export function getCategoryIcon(category: string): string {
-  return CATEGORY_ICONS[category] ?? "📦";
+export function getCategoryEmoji(handle: string): string {
+  return EMOJI_FALLBACK[handle] ?? "📦";
 }
