@@ -18,6 +18,7 @@ export async function getSections({
   sort = "popular",
   limit = 40,
   offset = 0,
+  includeFiles = true,
 }: {
   query?: string;
   category?: string;
@@ -28,6 +29,8 @@ export async function getSections({
   sort?: string;
   limit?: number;
   offset?: number;
+  /** Set false for list views to avoid loading file relations (faster). */
+  includeFiles?: boolean;
 }) {
   const where: any = { isPublished: true };
 
@@ -76,21 +79,25 @@ export async function getSections({
       break;
   }
 
+  const include: any = {
+    ...(shopId
+      ? {
+          ownerships: { where: { shopId }, select: { id: true } },
+          favorites: { where: { shopId }, select: { id: true } },
+        }
+      : {}),
+  };
+  if (includeFiles) {
+    include.files = { orderBy: { sortOrder: "asc" } };
+  }
+
   const [sections, total] = await Promise.all([
     db.section.findMany({
       where,
       orderBy,
       take: limit,
       skip: offset,
-      include: {
-        files: { orderBy: { sortOrder: "asc" } },
-        ...(shopId
-          ? {
-              ownerships: { where: { shopId }, select: { id: true } },
-              favorites: { where: { shopId }, select: { id: true } },
-            }
-          : {}),
-      },
+      include,
     }),
     db.section.count({ where }),
   ]);

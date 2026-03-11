@@ -1,595 +1,662 @@
-import { useState, useCallback } from "react";
-import type {
-  LoaderFunctionArgs,
-  HeadersFunction,
-  ActionFunctionArgs,
-} from "react-router";
+/**
+ * /app/sections — Explore Sections (FAST)
+ *
+ * Single-source page: this replaces the old URL/loader-filtered Explore page.
+ * It uses the Marketplace architecture:
+ * - Paginated fetch from GET /api/sections (50 at a time) + infinite scroll
+ * - Zustand persisted filters (per shop) + Fuse.js fuzzy search
+ * - useDeferredValue for instant typing + startTransition for filter updates
+ * - Memoized filtering + memoized cards + CSS content-visibility optimizations
+ */
 import {
-  useLoaderData,
-  useSearchParams,
-  useNavigate,
-  useFetcher,
-  Form,
-} from "react-router";
-import { authenticate } from "../shopify.server";
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
+import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import { useFetcher, useLoaderData, useNavigate, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+
 import db from "../db.server";
-import {
-  getSections,
-  getCategories,
-  getSectionByHandle,
-} from "../services/sections.server";
+import { authenticate } from "../shopify.server";
+import { getCategoryIcon } from "../constants/categories";
+import { useDebounce } from "../hooks/useDebounce";
+import { useFilteredSections } from "../hooks/useFilteredSections";
+import { useMarketplaceStore } from "../stores/marketplaceStore";
+import type {
+  PriceFilter,
+  SectionListItem,
+  SectionsApiResponse,
+  SortBy,
+} from "../types/marketplace";
 
-const CATEGORY_ICONS: Record<string, string> = {
-  popular: "⭐",
-  trending: "🔥",
-  newest: "🆕",
-  free: "🎁",
-  features: "✨",
-  testimonial: "💬",
-  hero: "🦸",
-  video: "🎬",
-  scrolling: "↔️",
-  "countdown-timer": "⏱️",
-  images: "🖼️",
-  snippet: "✂️",
-  faq: "❓",
-  gallery: "🎨",
-  product: "🛍️",
-  header: "📌",
-  footer: "📎",
-  banner: "🏷️",
-  "trust-badges": "🛡️",
-  counter: "🔢",
-  payment: "💳",
-  comparison: "⚖️",
-  other: "📦",
-};
-
-const QUICK_TABS = [
-  { key: "popular", label: "Popular" },
-  { key: "trending", label: "Trending" },
-  { key: "newest", label: "Newest" },
-  { key: "free", label: "Free" },
-  { key: "features", label: "Features" },
-  { key: "testimonial", label: "Testimonial" },
-  { key: "hero", label: "Hero" },
-  { key: "video", label: "Video" },
-  { key: "scrolling", label: "Scrolling" },
-  { key: "images", label: "Images" },
-  { key: "faq", label: "FAQ" },
-];
+const PAGE_SIZE = 50;
+const FEATURED_BADGE_LIMIT = 9;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  let session: any;
+  let shopId: string | undefined;
+  let shopDomain = "unknown";
+
   try {
-    const authResult = await authenticate.admin(request);
-    session = authResult.session;
+    const { session } = await authenticate.admin(request);
+    shopDomain = session.shop;
+    const shop = await db.shop.findUnique({ where: { domain: shopDomain } });
+    shopId = shop?.id;
   } catch (e) {
     if (process.env.NODE_ENV === "development") {
-      session = await db.session.findFirst({
-        where: { id: { startsWith: 'offline_' } }
+      const session = await db.session.findFirst({
+        where: { id: { startsWith: "offline_" } },
       });
-      if (!session) throw e;
+      if (session) {
+        shopDomain = session.shop;
+        const shop = await db.shop.findUnique({ where: { domain: shopDomain } });
+        shopId = shop?.id;
+      }
     } else {
       throw e;
     }
   }
 
-  const shopDomain = session.shop;
-  const shop = await db.shop.findUnique({
-    where: { domain: shopDomain },
-  });
-  const shopId = shop?.id;
-
-  const url = new URL(request.url);
-  const query = url.searchParams.get("q") || undefined;
-  const category = url.searchParams.get("category") || undefined;
-  const priceFilter =
-    (url.searchParams.get("price") as "free" | "paid" | "all") || undefined;
-  const sort = url.searchParams.get("sort") || "popular";
-  const showOwned = url.searchParams.get("owned") === "true";
-  const showFavorites = url.searchParams.get("favorites") === "true";
-  const detail = url.searchParams.get("detail") || null;
-
-  const [{ sections, total }, categories, detailSection] = await Promise.all([
-    getSections({
-      query,
-      category: mapQuickTab(category),
-      priceFilter,
-      shopId,
-      showOwned,
-      showFavorites,
-      sort: mapSort(category, sort),
-    }),
-    getCategories(),
-    detail && shopId ? getSectionByHandle(detail, shopId) : null,
-  ]);
-
-  return {
-    sections,
-    total,
-    categories,
-    detailSection,
-    shopId,
-    filters: {
-      query: query || "",
-      category: category || "all",
-      price: priceFilter || "all",
-      sort,
-      owned: showOwned,
-      favorites: showFavorites,
-    },
-  };
+  return { shopId: shopId ?? null, shopDomain };
 };
 
-function mapQuickTab(tab?: string): string | undefined {
-  if (!tab || tab === "all" || tab === "popular" || tab === "trending" || tab === "newest") {
-    return undefined;
-  }
-  if (tab === "free") return undefined;
-  return tab;
+export const headers: HeadersFunction = (args) => boundary.headers(args);
+
+interface ExploreCardProps {
+  section: SectionListItem;
+  index: number;
+  sortBy: SortBy;
+  onOpenDetail: (handle: string) => void;
+  onFavorite: (sectionId: string) => void;
 }
 
-function mapSort(category?: string, sort?: string): string {
-  if (category === "newest") return "newest";
-  return sort || "popular";
-}
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shop = await db.shop.findUnique({
-    where: { domain: session.shop },
-  });
-  if (!shop) return { error: "Shop not found" };
-
-  const formData = await request.formData();
-  const intent = formData.get("intent");
-
-  if (intent === "favorite") {
-    const sectionId = formData.get("sectionId") as string;
-    const { toggleFavorite } = await import("../services/sections.server");
-    const isFavorited = await toggleFavorite(shop.id, sectionId);
-    return { ok: true, isFavorited };
-  }
-
-  return { error: "Unknown intent" };
-};
-
-export default function SectionsPage() {
-  const { sections, total, categories, detailSection, filters } =
-    useLoaderData<typeof loader>();
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const fetcher = useFetcher();
-  const [searchValue, setSearchValue] = useState(filters.query);
-
-  const updateFilter = useCallback(
-    (key: string, value: string) => {
-      const params = new URLSearchParams(searchParams);
-      if (value && value !== "all" && value !== "false") {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
-      if (key !== "q") params.delete("detail");
-      navigate(`/app/sections?${params.toString()}`, { replace: true });
-    },
-    [searchParams, navigate],
-  );
-
-  const openDetail = useCallback(
-    (handle: string) => {
-      const params = new URLSearchParams(searchParams);
-      params.set("detail", handle);
-      navigate(`/app/sections?${params.toString()}`);
-    },
-    [searchParams, navigate],
-  );
-
-  const closeDetail = useCallback(() => {
-    const params = new URLSearchParams(searchParams);
-    params.delete("detail");
-    navigate(`/app/sections?${params.toString()}`);
-  }, [searchParams, navigate]);
-
-  const handleFavorite = useCallback(
-    (e: React.MouseEvent, sectionId: string) => {
-      e.stopPropagation();
-      fetcher.submit(
-        { intent: "favorite", sectionId },
-        { method: "POST" },
-      );
-    },
-    [fetcher],
-  );
-
-  const priceFilterFromTab =
-    filters.category === "free" ? "free" : filters.price;
-
-  return (
-    <s-page heading="Explore Sections">
-      {/* Search */}
-      <div className="ss-search-wrapper">
-        <Form method="get" action="/app/sections">
-          <div className="ss-search-box">
-            <span className="ss-search-icon">🔍</span>
-            <input
-              type="text"
-              name="q"
-              className="ss-search-input"
-              placeholder="Search for sections..."
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-            />
-            {/* Carry forward current filters */}
-            {filters.category !== "all" && (
-              <input type="hidden" name="category" value={filters.category} />
-            )}
-            {filters.price !== "all" && (
-              <input type="hidden" name="price" value={filters.price} />
-            )}
-          </div>
-        </Form>
-      </div>
-
-      {/* Main Layout: Sidebar + Grid + Quick Tabs */}
-      <div className="ss-explore-layout">
-        {/* Filters Sidebar (Left) */}
-        <aside className="ss-filters-sidebar">
-          {/* Categories */}
-          <div className="ss-filter-group">
-            <h4>Categories</h4>
-            <label className="ss-filter-item">
-              <input
-                type="radio"
-                name="cat"
-                checked={filters.category === "all"}
-                onChange={() => updateFilter("category", "all")}
-              />
-              All
-              <span className="ss-filter-count">{total}</span>
-            </label>
-            {categories.map((cat: any) => (
-              <label key={cat.name} className="ss-filter-item">
-                <input
-                  type="radio"
-                  name="cat"
-                  checked={filters.category === cat.name}
-                  onChange={() => updateFilter("category", cat.name)}
-                />
-                {cat.name}
-                <span className="ss-filter-count">{cat.count}</span>
-              </label>
-            ))}
-          </div>
-
-          {/* Price */}
-          <div className="ss-filter-group">
-            <h4>Price</h4>
-            {["all", "free", "paid"].map((p) => (
-              <label key={p} className="ss-filter-item">
-                <input
-                  type="radio"
-                  name="price"
-                  checked={priceFilterFromTab === p}
-                  onChange={() => updateFilter("price", p)}
-                />
-                {p === "all" ? "All" : p === "free" ? "Free" : "Paid"}
-              </label>
-            ))}
-          </div>
-
-          {/* My Sections */}
-          <div className="ss-filter-group">
-            <h4>My Library</h4>
-            <label className="ss-filter-item">
-              <input
-                type="checkbox"
-                checked={filters.owned}
-                onChange={(e) =>
-                  updateFilter("owned", e.target.checked ? "true" : "false")
-                }
-              />
-              Purchased
-            </label>
-            <label className="ss-filter-item">
-              <input
-                type="checkbox"
-                checked={filters.favorites}
-                onChange={(e) =>
-                  updateFilter(
-                    "favorites",
-                    e.target.checked ? "true" : "false",
-                  )
-                }
-              />
-              Favorites
-            </label>
-          </div>
-        </aside>
-
-        {/* Sections Grid (Middle) */}
-        <div className="ss-sections-main">
-          <div className="ss-results-header">
-            <span className="ss-results-count">
-              Showing {sections.length} of {total} sections
-            </span>
-            <select
-              className="ss-sort-select"
-              value={filters.sort}
-              onChange={(e) => updateFilter("sort", e.target.value)}
-            >
-              <option value="popular">Popular</option>
-              <option value="newest">Newest</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-            </select>
-          </div>
-
-          {sections.length > 0 ? (
-            <div className="ss-section-grid">
-              {sections.map((section: any) => {
-                const isOwned = section.ownerships?.length > 0;
-                const isFav = section.favorites?.length > 0;
-
-                return (
-                  <div
-                    key={section.id}
-                    className="ss-card"
-                    onClick={() => openDetail(section.handle)}
-                  >
-                    <div className="ss-card-thumb">
-                      {section.thumbnailUrl ? (
-                        <img
-                          src={section.thumbnailUrl}
-                          alt={section.title}
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="ss-card-thumb-placeholder">
-                          {CATEGORY_ICONS[section.category] || "📦"}
-                        </div>
-                      )}
-                      <button
-                        className="ss-card-fav"
-                        onClick={(e) => handleFavorite(e, section.id)}
-                        title={isFav ? "Remove from favorites" : "Add to favorites"}
-                      >
-                        {isFav ? "❤️" : "🤍"}
-                      </button>
-                      {isOwned ? (
-                        <span className="ss-card-badge ss-badge-owned">
-                          Owned
-                        </span>
-                      ) : section.price === 0 ? (
-                        <span className="ss-card-badge ss-badge-free">
-                          Free
-                        </span>
-                      ) : (
-                        <span className="ss-card-badge ss-badge-paid">
-                          Paid
-                        </span>
-                      )}
-                    </div>
-                    <div className="ss-card-body">
-                      <h3 className="ss-card-title">{section.title}</h3>
-                      <span className="ss-card-price">
-                        {section.price === 0
-                          ? "Free"
-                          : `$${(section.price / 100).toFixed(0)}`}
-                      </span>
-                    </div>
-                    <div className="ss-card-actions">
-                      {isOwned ? (
-                        <s-button
-                          variant="primary"
-                          onClick={(e: any) => {
-                            e.stopPropagation();
-                            openDetail(section.handle);
-                          }}
-                        >
-                          Add to theme
-                        </s-button>
-                      ) : section.price === 0 ? (
-                        <s-button
-                          variant="primary"
-                          onClick={(e: any) => {
-                            e.stopPropagation();
-                            openDetail(section.handle);
-                          }}
-                        >
-                          Get free section
-                        </s-button>
-                      ) : (
-                        <s-button
-                          variant="primary"
-                          onClick={(e: any) => {
-                            e.stopPropagation();
-                            openDetail(section.handle);
-                          }}
-                        >
-                          Buy now
-                        </s-button>
-                      )}
-                      <s-button
-                        onClick={(e: any) => {
-                          e.stopPropagation();
-                          openDetail(section.handle);
-                        }}
-                      >
-                        Preview
-                      </s-button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="ss-empty-state">
-              <h2>No sections found</h2>
-              <p>Try adjusting your search or filters.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Quick Category Tabs (Right Sidebar) */}
-        <aside className="ss-category-sidebar">
-          <h4>Explore</h4>
-          <div className="ss-category-tabs-vertical">
-            <button
-              className={`ss-cat-tab-v ${filters.category === "all" ? "active" : ""}`}
-              onClick={() => updateFilter("category", "all")}
-            >
-              <span className="ss-cat-icon-v">📋</span>
-              <span className="ss-cat-label-v">All</span>
-            </button>
-            {QUICK_TABS.map((tab) => (
-              <button
-                key={tab.key}
-                className={`ss-cat-tab-v ${filters.category === tab.key ? "active" : ""}`}
-                onClick={() => updateFilter("category", tab.key)}
-              >
-                <span className="ss-cat-icon-v">
-                  {CATEGORY_ICONS[tab.key] || "📦"}
-                </span>
-                <span className="ss-cat-label-v">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        </aside>
-      </div>
-
-      {/* Detail Modal */}
-      {detailSection && (
-        <SectionDetailModal
-          section={detailSection}
-          onClose={closeDetail}
-          onFavorite={handleFavorite}
-          fetcher={fetcher}
-        />
-      )}
-    </s-page>
-  );
-}
-
-function SectionDetailModal({
+const ExploreCard = memo(function ExploreCard({
   section,
-  onClose,
+  index,
+  sortBy,
+  onOpenDetail,
   onFavorite,
-  fetcher,
-}: {
-  section: any;
-  onClose: () => void;
-  onFavorite: (e: React.MouseEvent, id: string) => void;
-  fetcher: any;
-}) {
-  const isOwned = section.ownerships?.length > 0;
-  const isFav = section.favorites?.length > 0;
-  const navigate = useNavigate();
+}: ExploreCardProps) {
+  const showFeaturedBadge =
+    sortBy === "featured" && section.isFeatured && index < FEATURED_BADGE_LIMIT;
 
-  const handlePurchase = () => {
-    if (section.price === 0) {
-      fetcher.submit(
-        { intent: "install", sectionId: section.id },
-        { method: "POST", action: "/api/install" },
-      );
-    } else {
-      navigate(
-        `/api/purchase?sectionId=${section.id}&type=section`,
-      );
-    }
-  };
+  const priceLabel =
+    section.price === 0
+      ? "Free"
+      : `$${(section.price / 100).toFixed(section.price % 100 === 0 ? 0 : 2)}`;
 
   return (
-    <div className="ss-modal-overlay" onClick={onClose}>
-      <div className="ss-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="ss-modal-header">
-          <h2>{section.title}</h2>
-          <button className="ss-modal-close" onClick={onClose}>
-            ✕
-          </button>
-        </div>
-
-        <div className="ss-modal-body">
-          <div className="ss-modal-preview">
-            {section.thumbnailUrl ? (
-              <img src={section.thumbnailUrl} alt={section.title} />
-            ) : (
-              <div
-                className="ss-card-thumb-placeholder"
-                style={{ height: 300, borderRadius: 8 }}
-              >
-                {CATEGORY_ICONS[section.category] || "📦"}
-              </div>
-            )}
-          </div>
-
-          <div className="ss-modal-info">
-            <div className="ss-modal-price">
-              {section.price === 0
-                ? "Free"
-                : `$${(section.price / 100).toFixed(0)}`}
-            </div>
-
-            <ul className="ss-modal-meta">
-              {section.price === 0 && <li>✅ No recurring fees</li>}
-              {section.price > 0 && <li>✅ Lifetime access & free updates</li>}
-              <li>✅ Works with any Shopify theme</li>
-              <li>✅ Customize from Theme Editor</li>
-              <li>
-                📁 {section.files?.length || 0} file
-                {section.files?.length !== 1 ? "s" : ""}
-              </li>
-            </ul>
-
-            <div className="ss-modal-actions">
-              {isOwned ? (
-                <s-button
-                  variant="primary"
-                  onClick={() => {
-                    fetcher.submit(
-                      { intent: "install", sectionId: section.id },
-                      { method: "POST", action: "/api/install" },
-                    );
-                  }}
-                >
-                  Add to theme
-                </s-button>
-              ) : (
-                <s-button variant="primary" onClick={handlePurchase}>
-                  {section.price === 0
-                    ? "Get free section ✓"
-                    : `Purchase now — $${(section.price / 100).toFixed(0)}`}
-                </s-button>
-              )}
-
-              {section.demoUrl && (
-                <s-button
-                  onClick={() => window.open(section.demoUrl, "_blank")}
-                >
-                  Demo Store
-                </s-button>
-              )}
-
-              <s-button onClick={(e: any) => onFavorite(e, section.id)}>
-                {isFav ? "❤️ Favorited" : "🤍 Add to Favorites"}
-              </s-button>
-            </div>
-          </div>
-        </div>
-
-        {section.description && (
-          <div className="ss-modal-desc">
-            <h3>Details</h3>
-            <p>{section.description}</p>
+    <div
+      className="ss-card ss-mp-card"
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpenDetail(section.handle)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenDetail(section.handle);
+        }
+      }}
+      aria-label={`${section.title}, ${priceLabel}`}
+    >
+      <div className="ss-card-thumb">
+        {section.thumbnailUrl ? (
+          <img
+            src={section.thumbnailUrl}
+            alt={section.title}
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <div className="ss-card-thumb-placeholder">
+            {getCategoryIcon(section.category)}
           </div>
         )}
+
+        {showFeaturedBadge && (
+          <span className="ss-card-badge ss-badge-featured">⭐ Featured</span>
+        )}
+
+        {section.isOwned ? (
+          <span className="ss-card-badge ss-badge-owned">Owned</span>
+        ) : section.price === 0 ? (
+          <span className="ss-card-badge ss-badge-free">Free</span>
+        ) : (
+          <span className="ss-card-badge ss-badge-paid">{priceLabel}</span>
+        )}
+
+        <button
+          type="button"
+          className={`ss-card-fav${
+            section.isFavorited ? " ss-card-fav--active" : ""
+          }`}
+          aria-label={
+            section.isFavorited ? "Remove from favorites" : "Add to favorites"
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            onFavorite(section.id);
+          }}
+        >
+          {section.isFavorited ? "❤️" : "🤍"}
+        </button>
+      </div>
+
+      <div className="ss-card-body">
+        <h3 className="ss-card-title">{section.title}</h3>
+        <div className="ss-mp-card-meta">
+          <span className="ss-mp-card-category">
+            {getCategoryIcon(section.category)} {section.category}
+          </span>
+          {section.tags.slice(0, 3).map((tag) => (
+            <span key={tag} className="ss-mp-tag-pill">
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="ss-card-actions">
+        <s-button
+          variant="primary"
+          onClick={(e: any) => {
+            e.stopPropagation();
+            onOpenDetail(section.handle);
+          }}
+        >
+          Preview
+        </s-button>
+      </div>
+    </div>
+  );
+});
+
+function SkeletonCard() {
+  return (
+    <div className="ss-card ss-mp-card ss-mp-skeleton" aria-hidden="true">
+      <div className="ss-card-thumb ss-mp-skeleton-thumb" />
+      <div className="ss-card-body">
+        <div className="ss-mp-skeleton-line ss-mp-skeleton-line--title" />
+        <div className="ss-mp-skeleton-line ss-mp-skeleton-line--sub" />
       </div>
     </div>
   );
 }
 
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};
+export default function SectionsPage() {
+  const { shopId, shopDomain } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const favoriteFetcher = useFetcher();
+
+  // Runtime data
+  const allSections = useMarketplaceStore((s) => s.allSections);
+  const totalSections = useMarketplaceStore((s) => s.totalSections);
+  const lastUpdated = useMarketplaceStore((s) => s.lastUpdated);
+  const isLoading = useMarketplaceStore((s) => s.isLoading);
+  const isLoadingMore = useMarketplaceStore((s) => s.isLoadingMore);
+  const fetchError = useMarketplaceStore((s) => s.fetchError);
+
+  // Filters
+  const selectedCategory = useMarketplaceStore((s) => s.selectedCategory);
+  const selectedTags = useMarketplaceStore((s) => s.selectedTags);
+  const priceFilter = useMarketplaceStore((s) => s.priceFilter);
+  const sortBy = useMarketplaceStore((s) => s.sortBy);
+  const ownedOnly = useMarketplaceStore((s) => s.ownedOnly);
+  const favoritesOnly = useMarketplaceStore((s) => s.favoritesOnly);
+  const searchQuery = useMarketplaceStore((s) => s.searchQuery);
+
+  // Actions
+  const setAllSections = useMarketplaceStore((s) => s.setAllSections);
+  const appendSections = useMarketplaceStore((s) => s.appendSections);
+  const setLoading = useMarketplaceStore((s) => s.setLoading);
+  const setLoadingMore = useMarketplaceStore((s) => s.setLoadingMore);
+  const setFetchError = useMarketplaceStore((s) => s.setFetchError);
+  const setSearch = useMarketplaceStore((s) => s.setSearch);
+  const setCategory = useMarketplaceStore((s) => s.setCategory);
+  const toggleTag = useMarketplaceStore((s) => s.toggleTag);
+  const clearTags = useMarketplaceStore((s) => s.clearTags);
+  const setPriceFilter = useMarketplaceStore((s) => s.setPriceFilter);
+  const setSortBy = useMarketplaceStore((s) => s.setSortBy);
+  const setOwnedOnly = useMarketplaceStore((s) => s.setOwnedOnly);
+  const setFavoritesOnly = useMarketplaceStore((s) => s.setFavoritesOnly);
+  const resetFilters = useMarketplaceStore((s) => s.resetFilters);
+  const toggleFavoriteOptimistic = useMarketplaceStore(
+    (s) => s.toggleFavoriteOptimistic,
+  );
+
+  const [isPending, startTransition] = useTransition();
+
+  // Search: instant input + deferred filter value
+  const [inputValue, setInputValue] = useState(searchQuery);
+  const deferredQuery = useDeferredValue(inputValue);
+  const persistQuery = useDebounce(inputValue, 120);
+  useEffect(() => {
+    setSearch(persistQuery);
+  }, [persistQuery, setSearch]);
+
+  const isFilterPending = deferredQuery !== inputValue || isPending;
+
+  // Persist filters per shop
+  useEffect(() => {
+    if (!shopDomain || shopDomain === "unknown") return;
+    useMarketplaceStore.persist.setOptions({
+      name: `sections:filters:${shopDomain}`,
+    });
+    void useMarketplaceStore.persist.rehydrate();
+  }, [shopDomain]);
+
+  // Initial fetch (first page)
+  useEffect(() => {
+    const isStale =
+      !lastUpdated ||
+      Date.now() - new Date(lastUpdated).getTime() > CACHE_TTL_MS;
+
+    if (!isStale && allSections.length > 0) return;
+
+    setLoading(true);
+    fetch(`/api/sections?limit=${PAGE_SIZE}&offset=0`, {
+      credentials: "same-origin",
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<SectionsApiResponse>;
+      })
+      .then(({ sections, total, lastUpdated: lu }) => {
+        setAllSections(sections, total, lu);
+      })
+      .catch((err: Error) => setFetchError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId]);
+
+  // Infinite scroll
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const hasMore = totalSections !== null && allSections.length < totalSections;
+
+  useEffect(() => {
+    if (!hasMore || isLoadingMore || isLoading) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (!entry?.isIntersecting) return;
+
+        const offset = useMarketplaceStore.getState().allSections.length;
+        const total = useMarketplaceStore.getState().totalSections;
+        if (total === null || offset >= total) return;
+        if (useMarketplaceStore.getState().isLoadingMore) return;
+
+        useMarketplaceStore.getState().setLoadingMore(true);
+        fetch(`/api/sections?limit=${PAGE_SIZE}&offset=${offset}`, {
+          credentials: "same-origin",
+        })
+          .then((res) => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json() as Promise<SectionsApiResponse>;
+          })
+          .then(({ sections, total: t, lastUpdated: lu }) => {
+            appendSections(sections, t, lu);
+          })
+          .catch(() => {
+            setLoadingMore(false);
+          });
+      },
+      { rootMargin: "200px", threshold: 0 },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [appendSections, hasMore, isLoading, isLoadingMore, setLoadingMore]);
+
+  // Derived: categories and tags from loaded pages
+  const categories = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of allSections) map.set(s.category, (map.get(s.category) ?? 0) + 1);
+    return [
+      { key: "all", label: "All", count: allSections.length },
+      ...Array.from(map.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, count]) => ({ key, label: key, count })),
+    ];
+  }, [allSections]);
+
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of allSections) for (const t of s.tags) set.add(t);
+    return Array.from(set).sort();
+  }, [allSections]);
+
+  const filteredSections = useFilteredSections(
+    allSections,
+    deferredQuery,
+    selectedCategory,
+    selectedTags,
+    priceFilter,
+    sortBy,
+    ownedOnly,
+    favoritesOnly,
+  );
+
+  const hasActiveFilters =
+    inputValue.length > 0 ||
+    selectedCategory !== "all" ||
+    selectedTags.length > 0 ||
+    priceFilter !== "all" ||
+    sortBy !== "featured" ||
+    ownedOnly ||
+    favoritesOnly;
+
+  // Keep callback identity stable (useFetcher object changes every render)
+  const favoriteFetcherRef = useRef(favoriteFetcher);
+  useEffect(() => {
+    favoriteFetcherRef.current = favoriteFetcher;
+  });
+
+  const handleOpenDetail = useCallback(
+    (handle: string) => {
+      navigate(`/app/sections?detail=${handle}`);
+    },
+    [navigate],
+  );
+
+  const handleFavorite = useCallback(
+    (sectionId: string) => {
+      toggleFavoriteOptimistic(sectionId);
+      const fd = new FormData();
+      fd.set("sectionId", sectionId);
+      favoriteFetcherRef.current.submit(fd, {
+        method: "POST",
+        action: "/api/favorite",
+      });
+    },
+    [toggleFavoriteOptimistic],
+  );
+
+  const handleReset = useCallback(() => {
+    setInputValue("");
+    startTransition(() => resetFilters());
+  }, [resetFilters, startTransition]);
+
+  return (
+    <s-page heading="Explore Sections">
+      <div className="ss-mp-page">
+        {/* Search */}
+        <div className="ss-mp-search-row">
+          <div className="ss-mp-search-wrap">
+            <span className="ss-mp-search-icon" aria-hidden="true">
+              🔍
+            </span>
+            <input
+              type="search"
+              className="ss-mp-search-input"
+              placeholder="Search sections by name, tag, or category…"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              aria-label="Search sections"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {isLoading && (
+              <span className="ss-mp-search-spinner" aria-label="Loading…" />
+            )}
+            {inputValue.length > 0 && !isLoading && (
+              <button
+                type="button"
+                className="ss-mp-search-clear"
+                aria-label="Clear search"
+                onClick={() => setInputValue("")}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="ss-mp-toolbar">
+          <div className="ss-mp-filter-group">
+            <span className="ss-mp-filter-label">Category</span>
+            <div className="ss-mp-chips-scroll">
+              {categories.map((cat) => (
+                <button
+                  key={cat.key}
+                  type="button"
+                  className={`ss-mp-chip${
+                    selectedCategory === cat.key ? " ss-mp-chip--active" : ""
+                  }`}
+                  onClick={() => startTransition(() => setCategory(cat.key))}
+                >
+                  {cat.key !== "all" && (
+                    <span className="ss-mp-chip-icon">
+                      {getCategoryIcon(cat.key)}
+                    </span>
+                  )}
+                  {cat.key === "all" ? "All" : cat.label}
+                  <span className="ss-mp-chip-count">{cat.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="ss-mp-filter-group">
+            <span className="ss-mp-filter-label">Price</span>
+            <div className="ss-mp-segment">
+              {(["all", "free", "paid"] as PriceFilter[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className={`ss-mp-segment-btn${
+                    priceFilter === p ? " ss-mp-segment-btn--active" : ""
+                  }`}
+                  onClick={() => startTransition(() => setPriceFilter(p))}
+                >
+                  {p === "all" ? "All" : p === "free" ? "🎁 Free" : "💳 Paid"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="ss-mp-filter-group">
+            <span className="ss-mp-filter-label">My Library</span>
+            <div className="ss-mp-segment">
+              <button
+                type="button"
+                className={`ss-mp-segment-btn${
+                  ownedOnly ? " ss-mp-segment-btn--active" : ""
+                }`}
+                onClick={() => startTransition(() => setOwnedOnly(!ownedOnly))}
+              >
+                Purchased
+              </button>
+              <button
+                type="button"
+                className={`ss-mp-segment-btn${
+                  favoritesOnly ? " ss-mp-segment-btn--active" : ""
+                }`}
+                onClick={() =>
+                  startTransition(() => setFavoritesOnly(!favoritesOnly))
+                }
+              >
+                Favorites
+              </button>
+            </div>
+          </div>
+
+          <div className="ss-mp-filter-group">
+            <span className="ss-mp-filter-label">Sort</span>
+            <select
+              className="ss-mp-sort-select"
+              value={sortBy}
+              onChange={(e) =>
+                startTransition(() => setSortBy(e.target.value as SortBy))
+              }
+              aria-label="Sort sections"
+            >
+              <option value="featured">⭐ Featured</option>
+              <option value="newest">🆕 Newest</option>
+              <option value="price-low">↑ Price: Low → High</option>
+              <option value="price-high">↓ Price: High → Low</option>
+              <option value="title">🔤 Title A–Z</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Tags */}
+        {allTags.length > 0 && (
+          <div className="ss-mp-tags-row">
+            <span className="ss-mp-filter-label">Tags</span>
+            <div className="ss-mp-tags-scroll">
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`ss-mp-tag-btn${
+                    selectedTags.includes(tag) ? " ss-mp-tag-btn--active" : ""
+                  }`}
+                  onClick={() => startTransition(() => toggleTag(tag))}
+                >
+                  {tag}
+                </button>
+              ))}
+              {selectedTags.length > 0 && (
+                <button
+                  type="button"
+                  className="ss-mp-reset-btn"
+                  onClick={() => startTransition(() => clearTags())}
+                >
+                  Clear tags
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Results header */}
+        <div className="ss-mp-results-header">
+          <p className="ss-mp-count">
+            {isLoading
+              ? "Loading sections…"
+              : totalSections !== null && totalSections > PAGE_SIZE
+                ? `${filteredSections.length} section${
+                    filteredSections.length !== 1 ? "s" : ""
+                  } found · Showing ${allSections.length} of ${totalSections}`
+                : `${filteredSections.length} section${
+                    filteredSections.length !== 1 ? "s" : ""
+                  } found`}
+          </p>
+          {hasActiveFilters && !isLoading && (
+            <button
+              type="button"
+              className="ss-mp-reset-btn"
+              onClick={handleReset}
+            >
+              ✕ Reset filters
+            </button>
+          )}
+        </div>
+
+        {/* Error */}
+        {fetchError && (
+          <div className="ss-mp-error">
+            <span>⚠️ Could not load sections: {fetchError}</span>
+            <button
+              type="button"
+              className="ss-mp-error-retry"
+              onClick={() => {
+                setFetchError(null);
+                setLoading(true);
+                fetch(`/api/sections?limit=${PAGE_SIZE}&offset=0`, {
+                  credentials: "same-origin",
+                })
+                  .then((r) => r.json() as Promise<SectionsApiResponse>)
+                  .then(({ sections, total, lastUpdated: lu }) =>
+                    setAllSections(sections, total, lu),
+                  )
+                  .catch((err: Error) => setFetchError(err.message));
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Initial loading skeleton */}
+        {isLoading && allSections.length === 0 && (
+          <div className="ss-mp-loading-block">
+            <p className="ss-mp-loading-message">Loading perfect sections for you…</p>
+            <p className="ss-mp-loading-sub">
+              One moment while we get everything ready.
+            </p>
+            <div className="ss-mp-grid ss-section-grid">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Empty */}
+        {!isLoading && !fetchError && filteredSections.length === 0 && (
+          <div className="ss-mp-empty">
+            <span className="ss-mp-empty-icon">🔍</span>
+            <p className="ss-mp-empty-title">No sections found</p>
+            <p className="ss-mp-empty-sub">Try adjusting your search or filters.</p>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="ss-mp-reset-btn ss-mp-reset-btn--lg"
+                onClick={handleReset}
+              >
+                Reset filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Grid */}
+        {!isLoading && !fetchError && filteredSections.length > 0 && (
+          <>
+            <div
+              className={`ss-mp-grid ss-section-grid${
+                isFilterPending ? " ss-mp-pending" : ""
+              }`}
+            >
+              {filteredSections.map((section, index) => (
+                <ExploreCard
+                  key={section.id}
+                  section={section}
+                  index={index}
+                  sortBy={sortBy}
+                  onOpenDetail={handleOpenDetail}
+                  onFavorite={handleFavorite}
+                />
+              ))}
+            </div>
+
+            {hasMore && (
+              <div ref={sentinelRef} className="ss-mp-sentinel" aria-hidden="true" />
+            )}
+            {isLoadingMore && (
+              <div className="ss-mp-loading-more">
+                <span className="ss-mp-loading-more-spinner" aria-hidden="true" />
+                Loading more sections…
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </s-page>
+  );
+}
+
+export function ErrorBoundary() {
+  return boundary.error(useRouteError());
+}
+

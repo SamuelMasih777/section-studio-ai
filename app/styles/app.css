@@ -15,7 +15,7 @@
   --ss-transition: 0.2s ease;
 }
 
-/* ===== Section Grid ===== */
+/* ===== Section Grid (fallback / other pages) ===== */
 
 .ss-section-grid {
   display: grid;
@@ -41,6 +41,110 @@
   }
 }
 
+/* ===== Section Carousels (Explore page) ===== */
+
+.ss-carousels {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.ss-carousel-block {
+  width: 100%;
+}
+
+.ss-carousel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ss-text);
+  margin: 0 0 12px;
+}
+
+.ss-carousel-title-icon {
+  font-size: 20px;
+}
+
+.ss-carousel-nav-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.ss-carousel-arrow {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--ss-border);
+  border-radius: 50%;
+  background: var(--ss-card-bg);
+  color: var(--ss-text);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--ss-transition), border-color var(--ss-transition), color var(--ss-transition);
+  z-index: 2;
+}
+
+.ss-carousel-arrow:hover {
+  background: var(--ss-primary);
+  border-color: var(--ss-primary);
+  color: white;
+}
+
+.ss-carousel-arrow:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ss-carousel-arrow-left {
+  margin-right: 8px;
+}
+
+.ss-carousel-arrow-right {
+  margin-left: 8px;
+}
+
+.ss-carousel-track {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+  margin: 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.ss-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+/* Cards inside carousel: fixed width so they don't shrink */
+.ss-carousel-track .ss-card {
+  flex: 0 0 260px;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .ss-carousel-track .ss-card {
+    flex: 0 0 220px;
+  }
+  .ss-carousel-arrow {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+  }
+}
+
 /* ===== Section Card ===== */
 
 .ss-card {
@@ -51,6 +155,14 @@
   transition: box-shadow var(--ss-transition), transform var(--ss-transition);
   cursor: pointer;
   position: relative;
+  /**
+   * content-visibility: auto — the browser skips paint + compositing for
+   * cards outside the viewport.  For a 100-card grid this alone can cut
+   * initial render time by 60-80%.  contain-intrinsic-size reserves space
+   * so the scroll bar doesn't jump.
+   */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 320px;
 }
 
 .ss-card:hover {
@@ -257,64 +369,133 @@
   line-height: 1.5;
 }
 
-/* ===== Explore Layout ===== */
-
-.ss-explore-layout {
-  display: flex;
-  gap: 24px;
-  margin-top: 16px;
-}
-
-.ss-filters-sidebar {
-  width: 220px;
-  flex-shrink: 0;
-}
-
-@media (max-width: 1024px) {
-  .ss-explore-layout {
-    flex-wrap: wrap;
-  }
-  .ss-category-sidebar {
-    width: 100%;
-    order: -1; /* Move categories above filters/grid on tablet or just hide them? */
-  }
-  .ss-category-tabs-vertical {
-    flex-direction: row;
-    overflow-x: auto;
-    padding-bottom: 8px;
-  }
-  .ss-cat-tab-v {
-    width: auto;
-  }
-}
-
-@media (max-width: 780px) {
-  .ss-explore-layout {
-    flex-direction: column;
-  }
-  .ss-filters-sidebar,
-  .ss-sections-main {
-    width: 100%;
-  }
-}
+/* ===== Explore Layout (full width, no sidebars) ===== */
 
 .ss-sections-main {
   flex: 1;
   min-width: 0;
+  margin-top: 16px;
 }
 
-.ss-category-sidebar {
-  width: 140px;
-  flex-shrink: 0;
+.ss-sections-fullwidth {
+  width: 100%;
+  max-width: 100%;
 }
 
-.ss-category-sidebar h4 {
-  font-size: 13px;
+/* ===== Filter bar (below search) ===== */
+
+.ss-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px 24px;
+  padding: 16px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--ss-border);
+}
+
+.ss-filter-bar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ss-filter-bar-label {
+  font-size: 12px;
   font-weight: 600;
-  color: var(--ss-text);
-  margin: 0 0 10px;
+  color: var(--ss-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.ss-filter-categories {
+  flex: 1;
+  min-width: 0;
+}
+
+.ss-filter-category-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ss-filter-category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--ss-radius-sm);
+  border: 1px solid var(--ss-border);
+  background: var(--ss-card-bg);
+  font-size: 13px;
+  color: var(--ss-text);
+  cursor: pointer;
+  transition: all var(--ss-transition);
+}
+
+.ss-filter-category-chip:hover {
+  border-color: var(--ss-primary);
+  background: #f0f7ff;
+}
+
+.ss-filter-category-chip input {
+  margin: 0;
+  accent-color: var(--ss-primary);
+}
+
+.ss-filter-category-chip:has(input:checked) {
+  border-color: var(--ss-primary);
+  background: #e8f0fe;
+  color: var(--ss-primary);
+}
+
+.ss-filter-category-icon {
+  font-size: 16px;
+}
+
+.ss-filter-category-label {
+  font-weight: 500;
+}
+
+.ss-filter-category-count {
+  font-size: 11px;
+  color: var(--ss-text-secondary);
+  margin-left: 2px;
+}
+
+.ss-filter-price-options,
+.ss-filter-library {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.ss-filter-radio-item,
+.ss-filter-check-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ss-text);
+  cursor: pointer;
+}
+
+.ss-filter-radio-item input,
+.ss-filter-check-item input {
+  margin: 0;
+  accent-color: var(--ss-primary);
+}
+
+@media (max-width: 780px) {
+  .ss-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ss-filter-category-checkboxes {
+    max-height: 120px;
+    overflow-y: auto;
+  }
 }
 
 /* ===== Search ===== */
@@ -983,4 +1164,588 @@
 @keyframes ss-loading {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* ================================================================
+   MARKETPLACE PAGE  (app.marketplace.tsx)
+   All selectors use the ss-mp-* namespace.
+   ================================================================ */
+
+/* ── Page wrapper ─────────────────────────────────────────────── */
+
+.ss-mp-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px 20px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Search bar ───────────────────────────────────────────────── */
+
+.ss-mp-search-row {
+  width: 100%;
+}
+
+.ss-mp-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--ss-card-bg);
+  border: 1.5px solid var(--ss-border);
+  border-radius: var(--ss-radius);
+  transition: border-color var(--ss-transition), box-shadow var(--ss-transition);
+}
+
+.ss-mp-search-wrap:focus-within {
+  border-color: var(--ss-primary);
+  box-shadow: 0 0 0 3px rgba(44, 110, 203, 0.15);
+}
+
+.ss-mp-search-icon {
+  padding: 0 10px 0 14px;
+  font-size: 16px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.ss-mp-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--ss-text);
+  padding: 12px 0;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.ss-mp-search-input::placeholder {
+  color: var(--ss-text-secondary);
+}
+
+/* Remove browser's built-in clear button (we render our own) */
+.ss-mp-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.ss-mp-search-clear {
+  padding: 0 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ss-text-secondary);
+  font-size: 13px;
+  line-height: 1;
+  transition: color var(--ss-transition);
+}
+
+.ss-mp-search-clear:hover {
+  color: var(--ss-text);
+}
+
+/* Spinner shown while sections are loading from the API */
+.ss-mp-search-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--ss-border);
+  border-top-color: var(--ss-primary);
+  border-radius: 50%;
+  animation: ss-spin 0.7s linear infinite;
+  margin-right: 14px;
+  flex-shrink: 0;
+}
+
+@keyframes ss-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Filter toolbar ───────────────────────────────────────────── */
+
+.ss-mp-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.ss-mp-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ss-mp-filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ss-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* Category chips — horizontal scroll, no scrollbar */
+.ss-mp-chips-scroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+  max-width: 600px;
+}
+
+.ss-mp-chips-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.ss-mp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: 1.5px solid var(--ss-border);
+  border-radius: 20px;
+  background: var(--ss-card-bg);
+  font-size: 13px;
+  color: var(--ss-text);
+  cursor: pointer;
+  white-space: nowrap;
+  /* 80 ms feels snappy vs the default 200 ms */
+  transition: background 80ms ease, border-color 80ms ease, color 80ms ease;
+}
+
+.ss-mp-chip:hover {
+  border-color: var(--ss-primary);
+  color: var(--ss-primary);
+}
+
+.ss-mp-chip--active {
+  background: var(--ss-primary);
+  border-color: var(--ss-primary);
+  color: #fff;
+}
+
+.ss-mp-chip-icon {
+  font-size: 14px;
+}
+
+.ss-mp-chip-count {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* Price segment control */
+.ss-mp-segment {
+  display: flex;
+  border: 1.5px solid var(--ss-border);
+  border-radius: var(--ss-radius-sm);
+  overflow: hidden;
+  background: var(--ss-card-bg);
+}
+
+.ss-mp-segment-btn {
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--ss-text);
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease;
+  white-space: nowrap;
+}
+
+.ss-mp-segment-btn + .ss-mp-segment-btn {
+  border-left: 1px solid var(--ss-border);
+}
+
+.ss-mp-segment-btn:hover {
+  background: var(--ss-bg);
+}
+
+.ss-mp-segment-btn--active {
+  background: var(--ss-primary);
+  color: #fff;
+}
+
+/* Sort select */
+.ss-mp-sort-select {
+  padding: 6px 28px 6px 10px;
+  border: 1.5px solid var(--ss-border);
+  border-radius: var(--ss-radius-sm);
+  background: var(--ss-card-bg);
+  font-size: 13px;
+  color: var(--ss-text);
+  cursor: pointer;
+  appearance: auto;
+  outline: none;
+  transition: border-color var(--ss-transition);
+}
+
+.ss-mp-sort-select:focus {
+  border-color: var(--ss-primary);
+}
+
+/* ── Tag pills row ────────────────────────────────────────────── */
+
+.ss-mp-tags-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ss-mp-tags-scroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-wrap: wrap;
+  max-height: 64px;
+  overflow-y: hidden;
+}
+
+.ss-mp-tags-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.ss-mp-tag-btn {
+  padding: 3px 10px;
+  border: 1.5px solid var(--ss-border);
+  border-radius: 12px;
+  background: var(--ss-card-bg);
+  font-size: 12px;
+  color: var(--ss-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 80ms ease, border-color 80ms ease, color 80ms ease;
+}
+
+.ss-mp-tag-btn:hover {
+  border-color: var(--ss-primary);
+  color: var(--ss-primary);
+}
+
+.ss-mp-tag-btn--active {
+  background: #e8f0fb;
+  border-color: var(--ss-primary);
+  color: var(--ss-primary);
+  font-weight: 600;
+}
+
+/* Tag pills inside cards */
+.ss-mp-tag-pill {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--ss-bg);
+  font-size: 11px;
+  color: var(--ss-text-secondary);
+}
+
+/* ── Results header ───────────────────────────────────────────── */
+
+.ss-mp-results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ss-mp-count {
+  font-size: 13px;
+  color: var(--ss-text-secondary);
+  margin: 0;
+}
+
+.ss-mp-reset-btn {
+  padding: 5px 12px;
+  border: 1.5px solid var(--ss-border);
+  border-radius: var(--ss-radius-sm);
+  background: var(--ss-card-bg);
+  font-size: 12px;
+  color: var(--ss-text-secondary);
+  cursor: pointer;
+  transition: border-color var(--ss-transition), color var(--ss-transition);
+}
+
+.ss-mp-reset-btn:hover {
+  border-color: #d82c0d;
+  color: #d82c0d;
+}
+
+.ss-mp-reset-btn--lg {
+  padding: 8px 20px;
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+/* ── useTransition pending state ──────────────────────────────── */
+/* React marks concurrent updates as "pending" — we use a subtle
+   opacity fade so the UI acknowledges the work without a spinner. */
+
+.ss-mp-pending {
+  opacity: 0.55;
+  pointer-events: none;
+  /* Fast enough that it doesn't feel like lag itself */
+  transition: opacity 80ms ease;
+}
+
+/* ── Marketplace grid ─────────────────────────────────────────── */
+
+.ss-mp-grid {
+  /**
+   * contain: layout style — tells the browser that this grid's layout and
+   * style changes cannot affect anything outside the element.  Hover
+   * animations on one card no longer trigger layout recalculation for
+   * the whole page.
+   */
+  contain: layout style;
+}
+
+/* ── Enhanced card styles (extends .ss-card) ──────────────────── */
+
+.ss-mp-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.ss-mp-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.ss-mp-card-category {
+  font-size: 11px;
+  color: var(--ss-text-secondary);
+  text-transform: capitalize;
+}
+
+/* Featured badge */
+.ss-badge-featured {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 4px;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
+/* ── Loading block (initial fetch) ─────────────────────────────── */
+
+.ss-mp-loading-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ss-mp-loading-message {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ss-text);
+  margin: 0;
+}
+
+.ss-mp-loading-sub {
+  font-size: 14px;
+  color: var(--ss-text-secondary);
+  margin: -8px 0 0;
+}
+
+/* ── Skeleton loading cards ───────────────────────────────────── */
+
+.ss-mp-skeleton {
+  pointer-events: none;
+  animation: ss-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.ss-mp-skeleton-thumb {
+  background: linear-gradient(
+    90deg,
+    var(--ss-border) 25%,
+    #ebebeb 50%,
+    var(--ss-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: ss-skeleton-shimmer 1.4s infinite linear;
+}
+
+.ss-mp-skeleton-line {
+  height: 12px;
+  border-radius: 4px;
+  margin-top: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--ss-border) 25%,
+    #ebebeb 50%,
+    var(--ss-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: ss-skeleton-shimmer 1.4s infinite linear;
+}
+
+.ss-mp-skeleton-line--title {
+  width: 70%;
+}
+
+.ss-mp-skeleton-line--sub {
+  width: 45%;
+}
+
+@keyframes ss-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Empty state ──────────────────────────────────────────────── */
+
+.ss-mp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+  gap: 8px;
+}
+
+.ss-mp-empty-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.ss-mp-empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ss-text);
+  margin: 8px 0 0;
+}
+
+.ss-mp-empty-sub {
+  font-size: 14px;
+  color: var(--ss-text-secondary);
+  margin: 0;
+}
+
+/* ── Error banner ─────────────────────────────────────────────── */
+
+.ss-mp-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fff4f4;
+  border: 1px solid #fca5a5;
+  border-radius: var(--ss-radius-sm);
+  font-size: 14px;
+  color: #991b1b;
+}
+
+.ss-mp-error-retry {
+  margin-left: auto;
+  padding: 5px 14px;
+  border: 1px solid #fca5a5;
+  border-radius: var(--ss-radius-sm);
+  background: #fff;
+  color: #991b1b;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--ss-transition);
+}
+
+.ss-mp-error-retry:hover {
+  background: #fee2e2;
+}
+
+/* ── Infinite scroll sentinel & loading more ───────────────────── */
+
+.ss-mp-sentinel {
+  height: 1px;
+  width: 100%;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.ss-mp-loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  font-size: 14px;
+  color: var(--ss-text-secondary);
+}
+
+.ss-mp-loading-more-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ss-border);
+  border-top-color: var(--ss-primary);
+  border-radius: 50%;
+  animation: ss-spin 0.7s linear infinite;
+}
+
+/* ── Virtual grid container ───────────────────────────────────── */
+
+.ss-mp-virtual-scroll {
+  overflow-y: auto;
+  max-height: 80vh;
+  border-radius: var(--ss-radius);
+}
+
+.ss-mp-virtual-window {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.ss-mp-virtual-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  padding: 0 0 20px;
+}
+
+/* ── Responsive ───────────────────────────────────────────────── */
+
+@media (max-width: 1200px) {
+  .ss-mp-toolbar {
+    gap: 12px;
+  }
+  .ss-mp-virtual-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .ss-mp-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .ss-mp-filter-group {
+    width: 100%;
+  }
+  .ss-mp-chips-scroll {
+    max-width: 100%;
+  }
+  .ss-mp-virtual-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .ss-mp-page {
+    padding: 12px 12px 48px;
+  }
+  .ss-mp-virtual-row {
+    grid-template-columns: 1fr;
+  }
 }

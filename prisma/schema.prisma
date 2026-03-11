@@ -58,6 +58,10 @@ model Section {
   ownerships       SectionOwnership[]
   favorites        SectionFavorite[]
   bundleItems      BundleItem[]
+
+  @@index([isPublished, category])
+  @@index([isPublished, isFeatured, sortOrder])
+  @@index([isPublished, createdAt])
 }
 
 model SectionFile {
