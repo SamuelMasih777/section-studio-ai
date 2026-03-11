@@ -1174,12 +1174,14 @@
 /* ── Page wrapper ─────────────────────────────────────────────── */
 
 .ss-mp-page {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px 20px 60px;
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 20px 0 60px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-x: hidden;
 }
 
 /* ── Search bar ───────────────────────────────────────────────── */
@@ -1199,8 +1201,8 @@
 }
 
 .ss-mp-search-wrap:focus-within {
-  border-color: var(--ss-primary);
-  box-shadow: 0 0 0 3px rgba(44, 110, 203, 0.15);
+  border-color: #111827;
+  box-shadow: 0 0 0 1px #111827;
 }
 
 .ss-mp-search-icon {
@@ -1266,16 +1268,65 @@
 
 .ss-mp-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .ss-mp-filter-group {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Category row: must be able to shrink so scroll area takes remaining space */
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+/* Secondary toolbar row: Sort, Price, My Library — left-aligned, single row */
+.ss-mp-toolbar-row-secondary {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 20px;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* Generic horizontal scroll wrapper with arrows */
+.ss-mp-scroll-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Take full available width but never push outside the page */
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ss-mp-scroll-arrow {
   flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  border: 1px solid var(--ss-border);
+  background: var(--ss-card-bg);
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
+}
+
+.ss-mp-scroll-arrow:hover {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+}
+
+.ss-mp-scroll-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .ss-mp-filter-label {
@@ -1293,8 +1344,11 @@
   gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
-  padding-bottom: 2px;
-  max-width: 600px;
+  /* padding-right gives space so the last chip isn't clipped */
+  padding: 2px 12px 4px 0;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .ss-mp-chips-scroll::-webkit-scrollbar {
@@ -1318,14 +1372,19 @@
 }
 
 .ss-mp-chip:hover {
-  border-color: var(--ss-primary);
-  color: var(--ss-primary);
+  border-color: #111827;
+  color: #111827;
 }
 
 .ss-mp-chip--active {
-  background: var(--ss-primary);
-  border-color: var(--ss-primary);
-  color: #fff;
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
+}
+
+/* Keep text readable when active chip is hovered */
+.ss-mp-chip--active:hover {
+  color: #ffffff;
 }
 
 .ss-mp-chip-icon {
@@ -1362,11 +1421,11 @@
 }
 
 .ss-mp-segment-btn:hover {
-  background: var(--ss-bg);
+  background: #e5e7eb;
 }
 
 .ss-mp-segment-btn--active {
-  background: var(--ss-primary);
+  background: #111827;
   color: #fff;
 }
 
@@ -1385,7 +1444,7 @@
 }
 
 .ss-mp-sort-select:focus {
-  border-color: var(--ss-primary);
+  border-color: #111827;
 }
 
 /* ── Tag pills row ────────────────────────────────────────────── */
@@ -1401,9 +1460,11 @@
   gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
-  flex-wrap: wrap;
-  max-height: 64px;
-  overflow-y: hidden;
+  /* padding-right gives space so the last tag isn't clipped */
+  padding: 2px 12px 4px 0;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .ss-mp-tags-scroll::-webkit-scrollbar {
@@ -1411,27 +1472,34 @@
 }
 
 .ss-mp-tag-btn {
-  padding: 3px 10px;
+  padding: 5px 12px;
   border: 1.5px solid var(--ss-border);
-  border-radius: 12px;
+  border-radius: 20px;
   background: var(--ss-card-bg);
-  font-size: 12px;
-  color: var(--ss-text-secondary);
+  font-size: 13px;
+  color: var(--ss-text);
   cursor: pointer;
   white-space: nowrap;
   transition: background 80ms ease, border-color 80ms ease, color 80ms ease;
 }
 
 .ss-mp-tag-btn:hover {
-  border-color: var(--ss-primary);
-  color: var(--ss-primary);
+  border-color: #111827;
+  color: #111827;
 }
 
 .ss-mp-tag-btn--active {
-  background: #e8f0fb;
-  border-color: var(--ss-primary);
-  color: var(--ss-primary);
-  font-weight: 600;
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
+  padding: 5px 12px;
+}
+
+/* Keep text readable when active tag is hovered */
+.ss-mp-tag-btn--active:hover {
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
 }
 
 /* Tag pills inside cards */

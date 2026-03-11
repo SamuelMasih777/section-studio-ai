@@ -384,8 +384,67 @@ export default function SectionsPage() {
     startTransition(() => resetFilters());
   }, [resetFilters, startTransition]);
 
+  // Horizontal scroll state for Category and Tags rows
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+  const [catCanScrollLeft, setCatCanScrollLeft] = useState(false);
+  const [catCanScrollRight, setCatCanScrollRight] = useState(false);
+
+  const tagsScrollRef = useRef<HTMLDivElement>(null);
+  const [tagCanScrollLeft, setTagCanScrollLeft] = useState(false);
+  const [tagCanScrollRight, setTagCanScrollRight] = useState(false);
+
+  useEffect(() => {
+    function updateCategoryScroll() {
+      const el = categoryScrollRef.current;
+      if (!el) return;
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      const maxScroll = scrollWidth - clientWidth;
+      setCatCanScrollLeft(scrollLeft > 0);
+      setCatCanScrollRight(scrollLeft < maxScroll - 1);
+    }
+
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    updateCategoryScroll();
+
+    const onScroll = () => updateCategoryScroll();
+    const ro = new ResizeObserver(() => updateCategoryScroll());
+    el.addEventListener("scroll", onScroll, { passive: true });
+    ro.observe(el);
+
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      ro.disconnect();
+    };
+  }, [categories.length]);
+
+  useEffect(() => {
+    function updateTagsScroll() {
+      const el = tagsScrollRef.current;
+      if (!el) return;
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      const maxScroll = scrollWidth - clientWidth;
+      setTagCanScrollLeft(scrollLeft > 0);
+      setTagCanScrollRight(scrollLeft < maxScroll - 1);
+    }
+
+    const el = tagsScrollRef.current;
+    if (!el) return;
+    updateTagsScroll();
+
+    const onScroll = () => updateTagsScroll();
+    const ro = new ResizeObserver(() => updateTagsScroll());
+    el.addEventListener("scroll", onScroll, { passive: true });
+    ro.observe(el);
+
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      ro.disconnect();
+    };
+  }, [allTags.length]);
+
   return (
-    <s-page heading="Explore Sections">
+    <s-page heading="Explore Sections" inlineSize="large">
       <div className="ss-mp-page">
         {/* Search */}
         <div className="ss-mp-search-row">
@@ -420,29 +479,79 @@ export default function SectionsPage() {
         </div>
 
         {/* Filters */}
+        {/* Row 1: Category – full width, single row with arrows */}
         <div className="ss-mp-toolbar">
           <div className="ss-mp-filter-group">
             <span className="ss-mp-filter-label">Category</span>
-            <div className="ss-mp-chips-scroll">
-              {categories.map((cat) => (
-                <button
-                  key={cat.key}
-                  type="button"
-                  className={`ss-mp-chip${
-                    selectedCategory === cat.key ? " ss-mp-chip--active" : ""
-                  }`}
-                  onClick={() => startTransition(() => setCategory(cat.key))}
-                >
-                  {cat.key !== "all" && (
-                    <span className="ss-mp-chip-icon">
-                      {getCategoryIcon(cat.key)}
-                    </span>
-                  )}
-                  {cat.key === "all" ? "All" : cat.label}
-                  <span className="ss-mp-chip-count">{cat.count}</span>
-                </button>
-              ))}
+            <div className="ss-mp-scroll-wrapper">
+              <button
+                type="button"
+                className="ss-mp-scroll-arrow"
+                onClick={() => {
+                  const el = categoryScrollRef.current;
+                  if (!el) return;
+                  el.scrollBy({ left: -280, behavior: "smooth" });
+                }}
+                disabled={!catCanScrollLeft}
+                aria-label="Scroll categories left"
+              >
+                ‹
+              </button>
+              <div ref={categoryScrollRef} className="ss-mp-chips-scroll">
+                {categories.map((cat) => (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    className={`ss-mp-chip${
+                      selectedCategory === cat.key ? " ss-mp-chip--active" : ""
+                    }`}
+                    onClick={() => startTransition(() => setCategory(cat.key))}
+                  >
+                    {cat.key !== "all" && (
+                      <span className="ss-mp-chip-icon">
+                        {getCategoryIcon(cat.key)}
+                      </span>
+                    )}
+                    {cat.key === "all" ? "All" : cat.label}
+                    <span className="ss-mp-chip-count">{cat.count}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="ss-mp-scroll-arrow"
+                onClick={() => {
+                  const el = categoryScrollRef.current;
+                  if (!el) return;
+                  el.scrollBy({ left: 280, behavior: "smooth" });
+                }}
+                disabled={!catCanScrollRight}
+                aria-label="Scroll categories right"
+              >
+                ›
+              </button>
             </div>
+          </div>
+        </div>
+
+        {/* Row 2: Sort, Price, My Library in a single row */}
+        <div className="ss-mp-toolbar ss-mp-toolbar-row-secondary">
+          <div className="ss-mp-filter-group">
+            <span className="ss-mp-filter-label">Sort</span>
+            <select
+              className="ss-mp-sort-select"
+              value={sortBy}
+              onChange={(e) =>
+                startTransition(() => setSortBy(e.target.value as SortBy))
+              }
+              aria-label="Sort sections"
+            >
+              <option value="featured">⭐ Featured</option>
+              <option value="newest">🆕 Newest</option>
+              <option value="price-low">↑ Price: Low → High</option>
+              <option value="price-high">↓ Price: High → Low</option>
+              <option value="title">🔤 Title A–Z</option>
+            </select>
           </div>
 
           <div className="ss-mp-filter-group">
@@ -488,52 +597,62 @@ export default function SectionsPage() {
               </button>
             </div>
           </div>
-
-          <div className="ss-mp-filter-group">
-            <span className="ss-mp-filter-label">Sort</span>
-            <select
-              className="ss-mp-sort-select"
-              value={sortBy}
-              onChange={(e) =>
-                startTransition(() => setSortBy(e.target.value as SortBy))
-              }
-              aria-label="Sort sections"
-            >
-              <option value="featured">⭐ Featured</option>
-              <option value="newest">🆕 Newest</option>
-              <option value="price-low">↑ Price: Low → High</option>
-              <option value="price-high">↓ Price: High → Low</option>
-              <option value="title">🔤 Title A–Z</option>
-            </select>
-          </div>
         </div>
 
-        {/* Tags */}
+        {/* Tags – full width, single row with arrows */}
         {allTags.length > 0 && (
           <div className="ss-mp-tags-row">
             <span className="ss-mp-filter-label">Tags</span>
-            <div className="ss-mp-tags-scroll">
-              {allTags.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  className={`ss-mp-tag-btn${
-                    selectedTags.includes(tag) ? " ss-mp-tag-btn--active" : ""
-                  }`}
-                  onClick={() => startTransition(() => toggleTag(tag))}
-                >
-                  {tag}
-                </button>
-              ))}
-              {selectedTags.length > 0 && (
-                <button
-                  type="button"
-                  className="ss-mp-reset-btn"
-                  onClick={() => startTransition(() => clearTags())}
-                >
-                  Clear tags
-                </button>
-              )}
+            <div className="ss-mp-scroll-wrapper">
+              <button
+                type="button"
+                className="ss-mp-scroll-arrow"
+                onClick={() => {
+                  const el = tagsScrollRef.current;
+                  if (!el) return;
+                  el.scrollBy({ left: -280, behavior: "smooth" });
+                }}
+                disabled={!tagCanScrollLeft}
+                aria-label="Scroll tags left"
+              >
+                ‹
+              </button>
+              <div ref={tagsScrollRef} className="ss-mp-tags-scroll">
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    className={`ss-mp-tag-btn${
+                      selectedTags.includes(tag) ? " ss-mp-tag-btn--active" : ""
+                    }`}
+                    onClick={() => startTransition(() => toggleTag(tag))}
+                  >
+                    {tag}
+                  </button>
+                ))}
+                {selectedTags.length > 0 && (
+                  <button
+                    type="button"
+                    className="ss-mp-reset-btn"
+                    onClick={() => startTransition(() => clearTags())}
+                  >
+                    Clear tags
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                className="ss-mp-scroll-arrow"
+                onClick={() => {
+                  const el = tagsScrollRef.current;
+                  if (!el) return;
+                  el.scrollBy({ left: 280, behavior: "smooth" });
+                }}
+                disabled={!tagCanScrollRight}
+                aria-label="Scroll tags right"
+              >
+                ›
+              </button>
             </div>
           </div>
         )}
