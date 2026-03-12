@@ -169,6 +169,75 @@ const SECTIONS = [
   },
 ];
 
+const CATEGORIES = [
+  { handle: "hero",           name: "Hero",            emoji: "🦸",  sortOrder: 1 },
+  { handle: "features",       name: "Features",        emoji: "✨",  sortOrder: 2 },
+  { handle: "testimonial",    name: "Testimonial",     emoji: "💬",  sortOrder: 3 },
+  { handle: "faq",            name: "FAQ",             emoji: "❓",  sortOrder: 4 },
+  { handle: "video",          name: "Video",           emoji: "🎬",  sortOrder: 5 },
+  { handle: "scrolling",      name: "Scrolling",       emoji: "↔️",  sortOrder: 6 },
+  { handle: "payment",        name: "Payment",         emoji: "💳",  sortOrder: 7 },
+  { handle: "counter",        name: "Counter",         emoji: "🔢",  sortOrder: 8 },
+  { handle: "gallery",        name: "Gallery",         emoji: "🎨",  sortOrder: 9 },
+  { handle: "trust-badges",   name: "Trust Badges",    emoji: "🛡️",  sortOrder: 10 },
+  { handle: "comparison",     name: "Comparison",      emoji: "⚖️",  sortOrder: 11 },
+  { handle: "banner",         name: "Banner",          emoji: "🏷️",  sortOrder: 12 },
+  { handle: "images",         name: "Images",          emoji: "🖼️",  sortOrder: 13 },
+  { handle: "product",        name: "Product",         emoji: "🛍️",  sortOrder: 14 },
+  { handle: "header",         name: "Header",          emoji: "📌",  sortOrder: 15 },
+  { handle: "footer",         name: "Footer",          emoji: "📎",  sortOrder: 16 },
+  { handle: "snippet",        name: "Snippet",         emoji: "✂️",  sortOrder: 17 },
+  { handle: "countdown-timer",name: "Countdown Timer", emoji: "⏱️",  sortOrder: 18 },
+  { handle: "other",          name: "Other",           emoji: "📦",  sortOrder: 99 },
+];
+
+const TAGS = [
+  { handle: "hero",           name: "Hero",            emoji: "🦸",  sortOrder: 1 },
+  { handle: "free",           name: "Free",            emoji: "🎁",  sortOrder: 2 },
+  { handle: "premium",        name: "Premium",         emoji: "💎",  sortOrder: 3 },
+  { handle: "landing-page",   name: "Landing Page",    emoji: "📄",  sortOrder: 4 },
+  { handle: "full-width",     name: "Full Width",      emoji: "↔️",  sortOrder: 5 },
+  { handle: "video",          name: "Video",           emoji: "🎬",  sortOrder: 6 },
+  { handle: "animated",       name: "Animated",        emoji: "✨",  sortOrder: 7 },
+  { handle: "faq",            name: "FAQ",             emoji: "❓",  sortOrder: 8 },
+  { handle: "accordion",      name: "Accordion",       emoji: "📋",  sortOrder: 9 },
+  { handle: "tabs",           name: "Tabs",            emoji: "📑",  sortOrder: 10 },
+  { handle: "two-column",     name: "Two Column",      emoji: "▫️",  sortOrder: 11 },
+  { handle: "features",       name: "Features",        emoji: "✨",  sortOrder: 12 },
+  { handle: "icons",          name: "Icons",           emoji: "🔣",  sortOrder: 13 },
+  { handle: "trust",          name: "Trust",           emoji: "🛡️",  sortOrder: 14 },
+  { handle: "cards",          name: "Cards",           emoji: "🃏",  sortOrder: 15 },
+  { handle: "images",         name: "Images",          emoji: "🖼️",  sortOrder: 16 },
+  { handle: "testimonial",    name: "Testimonial",     emoji: "💬",  sortOrder: 17 },
+  { handle: "carousel",       name: "Carousel",        emoji: "🎠",  sortOrder: 18 },
+  { handle: "reviews",        name: "Reviews",         emoji: "⭐",  sortOrder: 19 },
+  { handle: "social-proof",   name: "Social Proof",    emoji: "👥",  sortOrder: 20 },
+  { handle: "grid",           name: "Grid",            emoji: "📊",  sortOrder: 21 },
+  { handle: "photos",         name: "Photos",          emoji: "📷",  sortOrder: 22 },
+  { handle: "product-page",   name: "Product Page",    emoji: "🛍️",  sortOrder: 23 },
+  { handle: "ugc",            name: "UGC",             emoji: "📱",  sortOrder: 24 },
+  { handle: "scrolling",      name: "Scrolling",       emoji: "↔️",  sortOrder: 25 },
+  { handle: "announcement",   name: "Announcement",    emoji: "📢",  sortOrder: 26 },
+  { handle: "marquee",        name: "Marquee",         emoji: "🏷️",  sortOrder: 27 },
+  { handle: "payment",        name: "Payment",         emoji: "💳",  sortOrder: 28 },
+  { handle: "checkout",       name: "Checkout",        emoji: "🛒",  sortOrder: 29 },
+  { handle: "counter",        name: "Counter",         emoji: "🔢",  sortOrder: 30 },
+  { handle: "stats",          name: "Stats",           emoji: "📈",  sortOrder: 31 },
+  { handle: "gallery",        name: "Gallery",         emoji: "🎨",  sortOrder: 32 },
+  { handle: "lightbox",       name: "Lightbox",        emoji: "💡",  sortOrder: 33 },
+  { handle: "badges",         name: "Badges",          emoji: "🏅",  sortOrder: 34 },
+  { handle: "security",       name: "Security",        emoji: "🔒",  sortOrder: 35 },
+  { handle: "conversion",     name: "Conversion",      emoji: "📈",  sortOrder: 36 },
+  { handle: "comparison",     name: "Comparison",      emoji: "⚖️",  sortOrder: 37 },
+  { handle: "table",          name: "Table",           emoji: "📋",  sortOrder: 38 },
+  { handle: "products",       name: "Products",        emoji: "🛍️",  sortOrder: 39 },
+  { handle: "pricing",        name: "Pricing",         emoji: "💲",  sortOrder: 40 },
+  { handle: "banner",         name: "Banner",          emoji: "🏷️",  sortOrder: 41 },
+  { handle: "promo",          name: "Promo",           emoji: "🎉",  sortOrder: 42 },
+  { handle: "countdown",      name: "Countdown",       emoji: "⏱️",  sortOrder: 43 },
+  { handle: "urgency",        name: "Urgency",         emoji: "⚡",  sortOrder: 44 },
+];
+
 const BUNDLES = [
   {
     handle: "starter-pack",
@@ -217,7 +286,29 @@ const BUNDLES = [
 ];
 
 async function main() {
-  console.log("Seeding sections...");
+  console.log("Seeding categories...");
+
+  for (const cat of CATEGORIES) {
+    await prisma.category.upsert({
+      where: { handle: cat.handle },
+      update: { name: cat.name, emoji: cat.emoji, sortOrder: cat.sortOrder },
+      create: cat,
+    });
+    console.log(`  ✓ ${cat.emoji} ${cat.name}`);
+  }
+
+  console.log("\nSeeding tags...");
+
+  for (const tag of TAGS) {
+    await prisma.tag.upsert({
+      where: { handle: tag.handle },
+      update: { name: tag.name, emoji: tag.emoji, sortOrder: tag.sortOrder },
+      create: tag,
+    });
+    console.log(`  ✓ ${tag.emoji} ${tag.name}`);
+  }
+
+  console.log("\nSeeding sections...");
 
   for (const sectionData of SECTIONS) {
     const { ...data } = sectionData;
@@ -271,6 +362,8 @@ async function main() {
   }
 
   console.log("\nDone! Seeded:");
+  console.log(`  ${CATEGORIES.length} categories`);
+  console.log(`  ${TAGS.length} tags`);
   console.log(`  ${SECTIONS.length} sections`);
   console.log(`  ${BUNDLES.length} bundles`);
 }

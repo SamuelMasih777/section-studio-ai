@@ -1,3 +1,6 @@
+import "@shopify/shopify-app-react-router/adapters/node";
+console.log("DEBUG: SHOPIFY_APP_URL =", process.env.SHOPIFY_APP_URL);
+console.log("DEBUG: APP_URL =", process.env.APP_URL);
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
@@ -7,14 +10,18 @@ import { login } from "../../shopify.server";
 import { loginErrorMessage } from "./error.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const errors = loginErrorMessage(await login(request));
+  const result = await login(request);
+  if (result instanceof Response) return result;
 
+  const errors = loginErrorMessage(result);
   return { errors };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const errors = loginErrorMessage(await login(request));
+  const result = await login(request);
+  if (result instanceof Response) return result;
 
+  const errors = loginErrorMessage(result);
   return {
     errors,
   };
@@ -30,18 +37,18 @@ export default function Auth() {
     <AppProvider embedded={false}>
       <s-page>
         <Form method="post">
-        <s-section heading="Log in">
-          <s-text-field
-            name="shop"
-            label="Shop domain"
-            details="example.myshopify.com"
-            value={shop}
-            onChange={(e) => setShop(e.currentTarget.value)}
-            autocomplete="on"
-            error={errors.shop}
-          ></s-text-field>
-          <s-button type="submit">Log in</s-button>
-        </s-section>
+          <s-section heading="Log in">
+            <s-text-field
+              name="shop"
+              label="Shop domain"
+              details="example.myshopify.com"
+              value={shop}
+              onChange={(e) => setShop(e.currentTarget.value)}
+              autocomplete="on"
+              error={errors.shop}
+            ></s-text-field>
+            <s-button type="submit">Log in</s-button>
+          </s-section>
         </Form>
       </s-page>
     </AppProvider>
