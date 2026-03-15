@@ -276,6 +276,15 @@ const SectionDetailModal = memo(function SectionDetailModal({
   onFavorite,
 }: SectionDetailModalProps) {
   const [currentImage, setCurrentImage] = useState(0);
+  const tryFetcher = useFetcher<{ editorUrl?: string; error?: string }>();
+  const isTrying = tryFetcher.state !== "idle";
+
+  // Open editor in new tab when ready
+  useEffect(() => {
+    if (tryFetcher.data?.editorUrl) {
+      window.open(tryFetcher.data.editorUrl, "_blank", "noopener,noreferrer");
+    }
+  }, [tryFetcher.data]);
 
   const images =
     section.previewImages.length > 0
@@ -328,6 +337,15 @@ const SectionDetailModal = memo(function SectionDetailModal({
     },
     [images.length],
   );
+
+  const handleTrySection = useCallback(() => {
+    const fd = new FormData();
+    fd.set("sectionHandle", section.handle);
+    tryFetcher.submit(fd, {
+      method: "POST",
+      action: "/api/try-section",
+    });
+  }, [section.handle, tryFetcher]);
 
   return (
     <div
@@ -511,10 +529,21 @@ const SectionDetailModal = memo(function SectionDetailModal({
                     Demo Store 🔗
                   </a>
                 )}
-                <button type="button" className="ss-detail-btn-secondary">
-                  Try section 🖼️
+                <button 
+                  type="button" 
+                  className="ss-detail-btn-secondary"
+                  onClick={handleTrySection}
+                  disabled={isTrying}
+                >
+                  {isTrying ? "Preparing editor..." : "Try section 🖼️"}
                 </button>
               </div>
+
+              {tryFetcher.data?.error && (
+                <div style={{ color: "var(--p-color-text-critical)", marginTop: "10px", fontSize: "13px" }}>
+                  ⚠️ {tryFetcher.data.error}
+                </div>
+              )}
 
               {!isFree && (
                 <div className="ss-detail-bundle-upsell">
