@@ -278,11 +278,23 @@ const SectionDetailModal = memo(function SectionDetailModal({
   const [currentImage, setCurrentImage] = useState(0);
   const tryFetcher = useFetcher<{ editorUrl?: string; error?: string }>();
   const isTrying = tryFetcher.state !== "idle";
+  const pendingEditorTabRef = useRef<Window | null>(null);
 
-  // Open editor in new tab when ready
   useEffect(() => {
     if (tryFetcher.data?.editorUrl) {
-      window.open(tryFetcher.data.editorUrl, "_blank", "noopener,noreferrer");
+      const pendingTab = pendingEditorTabRef.current;
+      if (pendingTab && !pendingTab.closed) {
+        pendingTab.location.href = tryFetcher.data.editorUrl;
+      } else {
+        window.open(tryFetcher.data.editorUrl, "_blank", "noopener,noreferrer");
+      }
+      pendingEditorTabRef.current = null;
+    } else if (tryFetcher.data?.error) {
+      const pendingTab = pendingEditorTabRef.current;
+      if (pendingTab && !pendingTab.closed) {
+        pendingTab.close();
+      }
+      pendingEditorTabRef.current = null;
     }
   }, [tryFetcher.data]);
 
@@ -339,6 +351,14 @@ const SectionDetailModal = memo(function SectionDetailModal({
   );
 
   const handleTrySection = useCallback(() => {
+    const pendingTab = window.open("", "_blank", "noopener,noreferrer");
+    if (pendingTab) {
+      pendingTab.document.title = "Preparing Theme Editor…";
+      pendingTab.document.body.innerHTML =
+        "<p style='font-family: sans-serif; padding: 16px;'>Preparing your trial theme editor…</p>";
+      pendingEditorTabRef.current = pendingTab;
+    }
+
     const fd = new FormData();
     fd.set("sectionHandle", section.handle);
     tryFetcher.submit(fd, {
@@ -544,7 +564,6 @@ const SectionDetailModal = memo(function SectionDetailModal({
                   ⚠️ {tryFetcher.data.error}
                 </div>
               )}
-
               {!isFree && (
                 <div className="ss-detail-bundle-upsell">
                   🎁 Better deal?{" "}

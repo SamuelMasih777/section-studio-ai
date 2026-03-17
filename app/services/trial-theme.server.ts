@@ -54,7 +54,7 @@ async function shopifyRest(
  * Returns the numeric theme ID as a string.
  */
 export async function ensureTrialTheme(
-  admin: any,
+  _admin: any,
   session: any,
 ): Promise<string> {
   const shop = session.shop;
@@ -132,13 +132,10 @@ async function waitForThemeReady(
  */
 export async function installSectionToTheme(
   admin: any,
-  session: any,
+  _session: any,
   themeId: string,
   sectionHandle: string,
 ): Promise<void> {
-  const shop = session.shop;
-  const accessToken = session.accessToken;
-
   // Get section files from DB
   const section = await db.section.findUnique({
     where: { handle: sectionHandle },
@@ -164,18 +161,37 @@ export async function installSectionToTheme(
           ? `assets/${file.filename}`
           : `snippets/${file.filename}`;
 
-    await shopifyRest(
-      shop,
-      accessToken,
-      "PUT",
-      `themes/${themeId}/assets.json`,
+    const uploadResponse = await admin.graphql(
+      `#graphql
+      mutation themeFilesUpsert($files: [OnlineStoreThemeFilesUpsertFileInput!]!, $themeId: ID!) {
+        themeFilesUpsert(files: $files, themeId: $themeId) {
+          upsertedThemeFiles {
+            filename
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }`,
       {
-        asset: {
-          key: assetKey,
-          value: content,
+        variables: {
+          themeId: `gid://shopify/OnlineStoreTheme/${themeId}`,
+          files: [
+            {
+              filename: assetKey,
+              body: { type: "TEXT", value: content },
+            },
+          ],
         },
       },
     );
+
+    const uploadData = await uploadResponse.json();
+    const userErrors = uploadData?.data?.themeFilesUpsert?.userErrors ?? [];
+    if (userErrors.length > 0) {
+      throw new Error(userErrors.map((e: any) => e.message).join(", "));
+    }
 
     console.log(`Installed: ${assetKey} -> theme ${themeId}`);
   }
