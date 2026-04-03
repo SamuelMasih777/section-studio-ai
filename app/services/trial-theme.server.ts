@@ -1,4 +1,5 @@
 import db from "../db.server";
+import { sanitizeShopifyFilename, getShopifyDirectory } from "../utils/filename";
 
 const TRIAL_THEME_NAME = "Section Studio Demo";
 const DEFAULT_TRIAL_THEME_ZIP_URL =
@@ -154,12 +155,9 @@ export async function installSectionToTheme(
       throw new Error(`Failed to fetch file: ${file.fileUrl}`);
     const content = await fetchResponse.text();
 
-    const assetKey =
-      file.fileType === "liquid"
-        ? `sections/${file.filename}`
-        : file.fileType === "css"
-          ? `assets/${file.filename}`
-          : `snippets/${file.filename}`;
+    const sanitizedFilename = sanitizeShopifyFilename(file.filename);
+    const directory = getShopifyDirectory(sanitizedFilename, file.fileType);
+    const assetKey = `${directory}/${sanitizedFilename}`;
 
     const uploadResponse = await admin.graphql(
       `#graphql
