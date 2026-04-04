@@ -276,6 +276,27 @@ const SectionDetailModal = memo(function SectionDetailModal({
   onFavorite,
 }: SectionDetailModalProps) {
   const [currentImage, setCurrentImage] = useState(0);
+  const tryFetcher = useFetcher<{ editorUrl?: string; error?: string }>();
+  const isTrying = tryFetcher.state !== "idle";
+  const pendingEditorTabRef = useRef<Window | null>(null);
+
+  useEffect(() => {
+    if (tryFetcher.data?.editorUrl) {
+      const pendingTab = pendingEditorTabRef.current;
+      if (pendingTab && !pendingTab.closed) {
+        pendingTab.location.href = tryFetcher.data.editorUrl;
+      } else {
+        window.open(tryFetcher.data.editorUrl, "_blank", "noopener,noreferrer");
+      }
+      pendingEditorTabRef.current = null;
+    } else if (tryFetcher.data?.error) {
+      const pendingTab = pendingEditorTabRef.current;
+      if (pendingTab && !pendingTab.closed) {
+        pendingTab.close();
+      }
+      pendingEditorTabRef.current = null;
+    }
+  }, [tryFetcher.data]);
 
   const images =
     section.previewImages.length > 0
@@ -328,6 +349,23 @@ const SectionDetailModal = memo(function SectionDetailModal({
     },
     [images.length],
   );
+
+  const handleTrySection = useCallback(() => {
+    const pendingTab = window.open("", "_blank", "noopener,noreferrer");
+    if (pendingTab) {
+      pendingTab.document.title = "Preparing Theme Editor…";
+      pendingTab.document.body.innerHTML =
+        "<p style='font-family: sans-serif; padding: 16px;'>Preparing your trial theme editor…</p>";
+      pendingEditorTabRef.current = pendingTab;
+    }
+
+    const fd = new FormData();
+    fd.set("sectionHandle", section.handle);
+    tryFetcher.submit(fd, {
+      method: "POST",
+      action: "/api/try-section",
+    });
+  }, [section.handle, tryFetcher]);
 
   return (
     <div
@@ -511,11 +549,21 @@ const SectionDetailModal = memo(function SectionDetailModal({
                     Demo Store 🔗
                   </a>
                 )}
-                <button type="button" className="ss-detail-btn-secondary">
-                  Try section 🖼️
+                <button 
+                  type="button" 
+                  className="ss-detail-btn-secondary"
+                  onClick={handleTrySection}
+                  disabled={isTrying}
+                >
+                  {isTrying ? "Preparing editor..." : "Try section 🖼️"}
                 </button>
               </div>
 
+              {tryFetcher.data?.error && (
+                <div style={{ color: "var(--p-color-text-critical)", marginTop: "10px", fontSize: "13px" }}>
+                  ⚠️ {tryFetcher.data.error}
+                </div>
+              )}
               {!isFree && (
                 <div className="ss-detail-bundle-upsell">
                   🎁 Better deal?{" "}

@@ -1,3 +1,5 @@
+import { sanitizeShopifyFilename, getShopifyDirectory } from "../utils/filename";
+
 export async function getActiveTheme(admin: any) {
   const response = await admin.graphql(
     `#graphql
@@ -35,12 +37,9 @@ export async function installSectionFiles(
     }
     const content = await contentResponse.text();
 
-    const assetKey =
-      file.fileType === "liquid"
-        ? `sections/${file.filename}`
-        : file.fileType === "css"
-          ? `assets/${file.filename}`
-          : `snippets/${file.filename}`;
+    const sanitizedFilename = sanitizeShopifyFilename(file.filename);
+    const directory = getShopifyDirectory(sanitizedFilename, file.fileType);
+    const assetKey = `${directory}/${sanitizedFilename}`;
 
     const assetResponse = await admin.graphql(
       `#graphql

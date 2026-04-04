@@ -8,58 +8,60 @@ datasource db {
 }
 
 model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
 
 model Shop {
-  id          String   @id @default(uuid())
-  domain      String   @unique
-  installedAt DateTime @default(now())
-  plan        String   @default("free")
-  ownerships  SectionOwnership[]
-  favorites   SectionFavorite[]
+  id          String             @id @default(uuid())
+  domain      String             @unique
+  installedAt DateTime           @default(now())
+  plan        String             @default("free")
   bundles     BundlePurchase[]
+  favorites   SectionFavorite[]
+  ownerships  SectionOwnership[]
 }
 
 model Section {
-  id               String   @id @default(uuid())
-  handle           String   @unique
-  title            String
-  description      String?
-  price            Int      @default(0)
-  compareAtPrice   Int?
-  presetsCount     Int      @default(1)
-  category         String
-  tags             String[] @default([])
-  thumbnailUrl     String?
-  previewImages    String[] @default([])
-  previewVideoUrl  String?
-  demoUrl          String?
-  isFeatured       Boolean  @default(false)
-  isPublished      Boolean  @default(true)
-  sortOrder        Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  files            SectionFile[]
-  ownerships       SectionOwnership[]
-  favorites        SectionFavorite[]
-  bundleItems      BundleItem[]
+  id              String             @id @default(uuid())
+  handle          String             @unique @db.VarChar(255)
+  title           String             @db.VarChar(255)
+  description     String?
+  price           Decimal            @default(0) @db.Decimal(10, 2)
+  category        String?            @db.VarChar(255)
+  tags            String[]           @default([]) @db.VarChar(255)
+  thumbnailUrl    String?            @db.VarChar(255)
+  previewImages   String[]           @default([]) @db.VarChar(255)
+  previewVideoUrl String?            @db.VarChar(255)
+  demoUrl         String?            @db.VarChar(255)
+  isFeatured      Boolean?           @default(false)
+  isPublished     Boolean?           @default(true)
+  sortOrder       Int?               @default(0)
+  createdAt       DateTime?          @db.Timestamptz(6)
+  updatedAt       DateTime?          @updatedAt @db.Timestamptz(6)
+  compareAtPrice  Decimal?           @db.Decimal(10, 2)
+  presetsCount    Int?               @default(0)
+  updatedBy       Json?
+  isActive        Boolean?           @default(true)
+  bundleItems     BundleItem[]
+  favorites       SectionFavorite[]
+  files           SectionFile[]
+  ownerships      SectionOwnership[]
 
   @@index([isPublished, category])
   @@index([isPublished, isFeatured, sortOrder])
@@ -83,8 +85,9 @@ model SectionOwnership {
   sectionId   String
   purchasedAt DateTime @default(now())
   chargeId    String?
-  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   section     Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
   @@unique([shopId, sectionId])
 }
 
@@ -92,54 +95,64 @@ model SectionFavorite {
   id        String  @id @default(uuid())
   shopId    String
   sectionId String
-  shop      Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
   section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  shop      Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
   @@unique([shopId, sectionId])
 }
 
 model Category {
-  handle      String   @id
-  name        String
-  emoji       String   @default("📦")
-  imageUrl    String?
+  handle      String    @id
+  name        String    @db.VarChar(255)
+  emoji       String?   @db.VarChar(255)
+  imageUrl    String?   @db.VarChar(255)
   description String?
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  sortOrder   Int?      @default(0)
+  isActive    Boolean?  @default(true)
+  createdAt   DateTime? @db.Timestamptz(6)
+  updatedBy   Json?
+  updatedAt   DateTime? @db.Timestamptz(6)
 }
 
 model Tag {
-  handle      String   @id
-  name        String
-  emoji       String   @default("🏷️")
-  imageUrl    String?
+  handle      String    @id
+  name        String    @db.VarChar(255)
+  emoji       String?   @db.VarChar(255)
+  imageUrl    String?   @db.VarChar(255)
   description String?
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  sortOrder   Int?      @default(0)
+  isActive    Boolean?  @default(true)
+  createdAt   DateTime? @db.Timestamptz(6)
+  updatedBy   Json?
+  updatedAt   DateTime? @db.Timestamptz(6)
 }
 
 model Bundle {
-  id           String         @id @default(uuid())
-  handle       String         @unique
-  title        String
+  id           String           @id @default(uuid())
+  handle       String           @unique @db.VarChar(255)
+  title        String           @db.VarChar(255)
   description  String?
-  price        Int
-  discount     Int            @default(25)
-  thumbnailUrl String?
-  isActive     Boolean        @default(true)
+  price        Decimal          @default(0) @db.Decimal(10, 2)
+  discount     Decimal?         @default(0) @db.Decimal(10, 2)
+  thumbnailUrl String?          @db.VarChar(255)
+  isActive     Boolean?         @default(true)
+  createdAt    DateTime?        @db.Timestamptz(6)
+  updatedAt    DateTime?        @updatedAt @db.Timestamptz(6)
+  updatedBy    Json?
   items        BundleItem[]
   purchases    BundlePurchase[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
 }
 
 model BundleItem {
-  id        String  @id @default(uuid())
+  id        String    @id @default(uuid())
   bundleId  String
   sectionId String
-  bundle    Bundle  @relation(fields: [bundleId], references: [id], onDelete: Cascade)
-  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  updatedBy Json?
+  createdAt DateTime? @db.Timestamptz(6)
+  updatedAt DateTime? @db.Timestamptz(6)
+  bundle    Bundle    @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  section   Section   @relation(fields: [sectionId], references: [id], onDelete: NoAction)
+
   @@unique([bundleId, sectionId])
 }
 
@@ -149,7 +162,37 @@ model BundlePurchase {
   bundleId    String
   chargeId    String?
   purchasedAt DateTime @default(now())
-  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   bundle      Bundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
   @@unique([shopId, bundleId])
+}
+
+model Purchases {
+  id        String    @id @db.Uuid
+  userId    String    @db.Uuid
+  sectionId String?   @db.VarChar(255)
+  bundleId  String?   @db.VarChar(255)
+  chargeId  String    @db.VarChar(255)
+  amount    Decimal   @db.Decimal(10, 2)
+  currency  String?   @default("USD") @db.VarChar(255)
+  status    String    @default("active") @db.VarChar(255)
+  createdAt DateTime? @db.Timestamptz(6)
+  updatedAt DateTime? @db.Timestamptz(6)
+  updatedBy Json?
+  Users     Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Users {
+  id           String      @id @db.Uuid
+  email        String      @unique @db.VarChar(255)
+  password     String      @db.VarChar(255)
+  display_name String?     @db.VarChar(255)
+  role         String?     @default("user") @db.VarChar(255)
+  isSuperAdmin Boolean?    @default(false)
+  createdAt    DateTime?   @db.Timestamptz(6)
+  updatedAt    DateTime?   @db.Timestamptz(6)
+  updatedBy    Json?
+  isActive     Boolean?    @default(true)
+  Purchases    Purchases[]
 }
